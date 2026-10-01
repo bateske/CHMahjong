@@ -8,7 +8,9 @@ namespace tile {
 RAMFUNC(tile) void draw(const uint8_t *cell, int x, int y, const uint8_t *lut, uint8_t side) {
     // Two source pixels (four bits) -> one framebuffer byte.
     uint8_t tab[16];
-    for (uint8_t n = 0; n < 16; n++) tab[n] = (uint8_t)(lut[n & 3] | (lut[n >> 2] << 4));
+    bool bare = !cell;               // only the side
+    if (!bare)
+        for (uint8_t n = 0; n < 16; n++) tab[n] = (uint8_t)(lut[n & 3] | (lut[n >> 2] << 4));
     uint8_t ss = (uint8_t)(side * 0x11);
     int bx = x >> 1;
     for (int r = 0; r < H + SIDE; r++, cell += 2) {
@@ -17,7 +19,11 @@ RAMFUNC(tile) void draw(const uint8_t *cell, int x, int y, const uint8_t *lut, u
         if ((unsigned)yy >= GFX_H) continue;
         uint8_t row[5];
         int k0 = 0, k1 = 5;
-        if (r < H) {
+        if (r < H && bare) {
+            if (r < SIDE) continue;
+            row[4] = ss;
+            k0 = 4;
+        } else if (r < H) {
             uint8_t a = cell[0], b = cell[1];
             row[0] = tab[a & 15]; row[1] = tab[a >> 4];
             row[2] = tab[b & 15]; row[3] = tab[b >> 4];

@@ -63,6 +63,10 @@ static const uint8_t ANN_FRAMES = 60;
 static uint8_t streakWas;            // the streak before the pair in flight
 
 static const uint8_t DROP_FRAMES = 60, FALL = 6;     // the deal: tiles land over a second
+// The tile lying squarely on each tile (NONE: none). Such a tile, with its
+// side, hides the face of the one under it completely, so only that one's
+// side is drawn: 56 of the turtle's 144, to begin with.
+static uint8_t over[board::MAX_TILES];
 static const uint8_t RM_ID[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 
 static inline bool has(const uint8_t *s, uint8_t i) { return (s[i >> 3] >> (i & 7)) & 1; }
@@ -105,6 +109,17 @@ static void fixCursor() {
     idleT = 0;
 }
 
+static void findCovers() {
+    for (uint8_t i = 0; i < board::count; i++) {
+        const board::Pos &p = board::pos[i];
+        over[i] = NONE;
+        for (uint8_t j = (uint8_t)(i + 1); j < board::count; j++) {
+            const board::Pos &q = board::pos[j];
+            if (q.x2 == p.x2 && q.y2 == p.y2 && q.z == p.z + 1) { over[i] = j; break; }
+        }
+    }
+}
+
 static void reset() {
     phaseT = 0;
     cur = sel = NONE;
@@ -123,6 +138,7 @@ void deal(uint8_t layout, uint32_t seed) {
     reset();
     board::layout = layout;
     board::dealBegin(seed);
+    findCovers();
     shown = 0;
     phase = SHUFFLING;
     audio::sfx(Sfx::Shuffle);
@@ -130,6 +146,7 @@ void deal(uint8_t layout, uint32_t seed) {
 
 void resume() {
     reset();
+    findCovers();
     shown = board::chips;
     phase = PLAY;
     if (board::isFree(board::mark)) cur = board::mark;     // where the glove was
@@ -408,6 +425,11 @@ static void drawPile(uint32_t frame) {
             if (age < FALL) y -= (FALL - age) * (FALL - age);
         }
         if (i == sel || (i == cur && glove)) continue;       // drawn raised, afterwards
+        uint8_t top = over[i];
+        if (phase == PLAY && top != NONE && board::present(top) && top != sel && !(top == cur && glove)) {
+            tile::draw(nullptr, x, y, nullptr, TILE_SIDE);       // its face is hidden
+            continue;
+        }
         bool lit = glintT && has(glint, i);
         drawTile(i, x, y, lit ? FX_B : (shade && !board::isFree(i)) ? SILVER : WHITE, TILE_SIDE);
     }

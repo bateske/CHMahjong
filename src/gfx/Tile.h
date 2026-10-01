@@ -15,7 +15,8 @@ constexpr int SIDE = 2;
 constexpr uint8_t NO_SIDE = 0xFF;
 
 // cell: 24 bytes (tools/assets.py pack_cell). lut: face, edge, ink, ink.
-// x is taken as even. Clipped to the screen.
+// x is taken as even. Clipped to the screen. With no cell (nullptr), only
+// the side is drawn: all that shows of a tile with another squarely on it.
 void draw(const uint8_t *cell, int x, int y, const uint8_t *lut, uint8_t side);
 
 }  // namespace tile
