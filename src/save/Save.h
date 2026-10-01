@@ -14,7 +14,7 @@
 struct Options {
     uint8_t sound;      // 0 off, 1 on
     uint8_t felt;       // table colour (pal::Theme)
-    uint8_t flat;       // 0: tiles you cannot take yet are shaded; 1: all drawn alike
+    uint8_t faces;      // 0 classic, 1 easy (numbers)
     uint8_t speed;      // 0 normal, 1 quick (no deal animation, faster matches)
     uint8_t layout;     // last layout chosen
     uint8_t view;       // 0 the whole table, 1 close up (B held: the other)

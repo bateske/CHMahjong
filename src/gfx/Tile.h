@@ -5,12 +5,12 @@
 // Faces are stored at 2 bits a pixel: the face, the emboss (the art's
 // shadow, a pixel down and right of it, worked out by tools/assets.py) and
 // two inks; the edge is drawn round them. They are drawn through a Style,
-// so the same art is a free tile (embossed), a blocked one (flat and dim),
-// a flash or a shimmer.
+// so the same art is a tile, a white flash or a gold shimmer.
 //
 // At 1x a tile is drawn at an even x: a framebuffer byte is two pixels, so
 // a row is a few byte stores. Scaled (the close-up view), w is the tile's
-// width, 8..16 px; 16 is the fast doubled case.
+// width, 8..16 px; 16 is the fast case (the 16x24 face if there is one,
+// else the small one doubled).
 #pragma once
 #include <stdint.h>
 
@@ -27,9 +27,17 @@ struct Style {
 // Rows drawn: [y0, y1). Also sets CHGfx's clip to them.
 void setClip(int y0, int y1);
 
-// cell: 24 bytes (tools/assets.py pack_cell); inks: low nibble, high nibble.
-// No cell (nullptr): the body only - all that shows of a tile with another
-// squarely on it.
-void draw(const uint8_t *cell, uint8_t inks, int x, int y, const Style &s, int w = W);
+// A face: its 8x12 cell (24 bytes, tools/assets.py pack_cell) and inks (low
+// nibble, high nibble), and optionally a 16x24 one (96 bytes) for close up.
+// No cell: the body only - all that shows of a tile with another squarely
+// on it.
+struct Face {
+    const uint8_t *cell;
+    uint8_t inks;
+    const uint8_t *big;
+    uint8_t bigInks;
+};
+
+void draw(const Face &f, int x, int y, const Style &s, int w = W);
 
 }  // namespace tile

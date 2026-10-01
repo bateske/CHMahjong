@@ -1,4 +1,5 @@
-"""The tile faces as one picture, for editing in a paint program.
+"""The EASY tile faces (tools/art/tiles.txt) as one picture, for editing in a
+paint program. (The CLASSIC faces come from tools/faces.py.)
 
     python tools/sheet.py export [SHEET.png]     tools/art/tiles.txt -> a sheet (default tools/art/sheet.png)
     python tools/sheet.py import [SHEET.png]     the sheet -> tools/art/tiles.txt, then tools/assets.py

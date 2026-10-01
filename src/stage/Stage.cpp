@@ -25,13 +25,13 @@ static const int PLATE_Y = 116;
 static const int PILE_Y0 = 10, PILE_Y1 = 116;        // the rows the pile is drawn in
 
 // How a tile looks: face, emboss, edge, then its body - the side (the tile's
-// thickness) and the backing.
+// thickness) and the backing. Every tile is white: the glove only stops on
+// the ones you can take, so nothing needs greying out.
 #ifndef CHMJ_BODY_SIDE
 #define CHMJ_BODY_SIDE SKIN       // ivory; GOLD is a gilded look
 #endif
 static const uint8_t BODY_SIDE = CHMJ_BODY_SIDE, BODY_BACK = WOOD;
-static const tile::Style FREE    = {WHITE, SILVER, WOOD, BODY_SIDE, BODY_BACK};
-static const tile::Style BLOCKED = {SILVER, SILVER, WOOD, BODY_SIDE, BODY_BACK};   // flat: no emboss
+static const tile::Style FREE    = {WHITE, SKIN, WOOD, BODY_SIDE, BODY_BACK};
 static const tile::Style GLINT   = {FX_B, GOLD, WOOD, BODY_SIDE, BODY_BACK};
 static const tile::Style WHITE_OUT   = {WHITE, WHITE, WHITE, WHITE, WHITE};
 static const tile::Style BACKS   = {FELT_LT, FELT_LT, WOOD, BODY_SIDE, BODY_BACK};
@@ -47,7 +47,7 @@ static int pMinX, pMaxX, pMinY, pMaxY;   // the pile's extent
 enum Phase : uint8_t { PLAY, SHUFFLING, DROPPING, RESHUFFLE };
 static uint8_t phase;
 static uint16_t phaseT;
-static bool quick, shade = true;
+static bool quick, easy;            // easy: the faces with numbers
 
 static uint8_t cur = NONE, sel = NONE;
 static uint32_t gen;                 // counts changes to the pile (for the redraw check)
@@ -110,7 +110,13 @@ static void viewSetup() {
 }
 
 void setQuick(bool on) { quick = on; }
-void setShade(bool on) { shade = on; gen++; }
+void setFaces(bool numbers) { easy = numbers; gen++; }
+
+// Face f in the chosen set; the classic one has its own art for close up.
+static tile::Face faceOf(uint8_t f) {
+    if (easy) return tile::Face{TILE_CELL_EASY[f], TILE_INK_EASY[f], nullptr, 0};
+    return tile::Face{TILE_CELL_CLASSIC[f], TILE_INK_CLASSIC[f], TILE_CELL_BIG[f], TILE_INK_BIG[f]};
+}
 uint8_t cursor() { return cur; }
 uint8_t selected() { return sel; }
 void invalidate();
@@ -472,8 +478,7 @@ static void drawTable() {
 }
 
 static void drawTile(uint8_t i, int x, int y, const tile::Style &st) {
-    uint8_t f = board::face[i];
-    tile::draw(TILE_CELL[f], TILE_INK[f], x, y, st, vw);
+    tile::draw(faceOf(board::face[i]), x, y, st, vw);
 }
 
 static bool onScreen(int x, int y) {
@@ -512,7 +517,7 @@ static void drawPile(uint32_t frame) {
             uint32_t h = (i * 2654435761u) ^ ((frame >> 2) * 40503u);
             x += (int)((h >> 8) & 2) - 2 + 2 * (int)((h >> 12) & 1);
             y += (int)((h >> 16) % 3) - 1;
-            if (onScreen(x, y)) tile::draw(TILE_CELL[TILE_BACK], TILE_INK[TILE_BACK], x, y, BACKS, vw);
+            if (onScreen(x, y)) tile::draw(faceOf(TILE_BACK), x, y, BACKS, vw);
             continue;
         }
         if (phase == DROPPING) {
@@ -526,11 +531,12 @@ static void drawPile(uint32_t frame) {
         }
         uint8_t top = over[i];
         if (phase == PLAY && top != NONE && board::present(top) && top != sel && !(top == cur && glove)) {
-            tile::draw(nullptr, 0, x, y, FREE, vw);          // its face is hidden: just its body
+            static const tile::Face BODY = {nullptr, 0, nullptr, 0};
+            tile::draw(BODY, x, y, FREE, vw);                // its face is hidden: just its body
             continue;
         }
         bool lit = glintT && has(glint, i);
-        drawTile(i, x, y, lit ? GLINT : (shade && !board::isFree(i)) ? BLOCKED : FREE);
+        drawTile(i, x, y, lit ? GLINT : FREE);
     }
     if (phase == PLAY) {
         // The twins of the tile in hand, and a hint.
@@ -559,9 +565,9 @@ static void drawMovers() {
         int x = VX(m.x0 + (((m.x1 - m.x0) * e) >> 8)), y = VY(m.y0 + (((m.y1 - m.y0) * e) >> 8));
         y -= zs((fx::isin(t * 128 / mvN) * 6) >> 8);         // a little hop
         if (vw == tile::W) x &= ~1;
-        uint8_t f = board::face[m.tile];
-        if (mvT >= mvN) tile::draw(TILE_CELL[f], 0x11, x, y, WHITE_OUT, vw);
-        else tile::draw(TILE_CELL[f], TILE_INK[f], x, y, FREE, vw);
+        tile::Face f = faceOf(board::face[m.tile]);
+        if (mvT >= mvN) { f.inks = f.bigInks = 0x11; tile::draw(f, x, y, WHITE_OUT, vw); }   // all white
+        else tile::draw(f, x, y, FREE, vw);
     }
     tile::setClip(0, GFX_H);
 }
@@ -665,7 +671,7 @@ static uint32_t signature(uint32_t frame, uint32_t ui) {
     uint32_t h = 2166136261u;
     uint32_t v[] = {
         cur, sel, gen, frame >> 3, hintT ? frame >> 2 : 0, (uint32_t)shown, board::secs(), board::streak, leftShown,
-        (uint32_t)(board::streakT * 64 / board::STREAK_FRAMES), glintT != 0, winT != 0, stuckT != 0, ui, shade,
+        (uint32_t)(board::streakT * 64 / board::STREAK_FRAMES), glintT != 0, winT != 0, stuckT != 0, ui, easy,
         (uint32_t)vw, (uint32_t)fx16, (uint32_t)fy16,
     };
     for (uint32_t x : v) h = (h ^ x) * 16777619u;

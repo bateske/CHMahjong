@@ -79,7 +79,7 @@ static void persist(bool withGame) {
 static void applyOptions() {
     audio::setOn(opt.sound != 0);
     pal::setTheme(opt.felt);
-    stage::setShade(opt.flat == 0);
+    stage::setFaces(opt.faces != 0);
     stage::setQuick(opt.speed != 0);
 }
 
@@ -194,8 +194,10 @@ static void titleUpdate() {
 static void titleRender(uint32_t frame) {
     gfx_clear(FELT);
     for (auto &f : fallers) {
-        static const tile::Style LOOK = {WHITE, SILVER, WOOD, SKIN, WOOD};
-        tile::draw(TILE_CELL[f.face], TILE_INK[f.face], f.x, f.y16 >> 4, LOOK);
+        static const tile::Style LOOK = {WHITE, SKIN, WOOD, SKIN, WOOD};
+        tile::Face face = opt.faces ? tile::Face{TILE_CELL_EASY[f.face], TILE_INK_EASY[f.face], nullptr, 0}
+                                    : tile::Face{TILE_CELL_CLASSIC[f.face], TILE_INK_CLASSIC[f.face], nullptr, 0};
+        tile::draw(face, f.x, f.y16 >> 4, LOOK);
     }
     dither(0, 0, 128, 34, INK, 0);
     // The top rows are FX_B, so the palette makes the logo shimmer.
@@ -415,9 +417,9 @@ static void playRender(uint32_t frame) {
 // ---------------------------------------------------------------------------
 // Options
 // ---------------------------------------------------------------------------
-enum Opt : uint8_t { O_SOUND, O_FELT, O_SHADE, O_VIEW, O_SPEED, O_BACK, OPT_COUNT };
+enum Opt : uint8_t { O_SOUND, O_FELT, O_FACES, O_VIEW, O_SPEED, O_BACK, OPT_COUNT };
 static const char *const OPT_TEXT[OPT_COUNT] = {
-    "SOUND|OFF|ON", "TABLE|GREEN|BLUE|RED|PURPLE", "SHADE|ON|OFF", "VIEW|FULL|CLOSE", "PACE|FUN|QUICK", "BACK",
+    "SOUND|OFF|ON", "TABLE|GREEN|BLUE|RED|PURPLE", "TILES|CLASSIC|EASY", "VIEW|FULL|CLOSE", "PACE|FUN|QUICK", "BACK",
 };
 // The option's byte in Options.
 static uint8_t &optByte(uint8_t i) {

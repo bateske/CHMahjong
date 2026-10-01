@@ -2,10 +2,12 @@
 
     python tools/assets.py
 
-  * The tile faces: tools/art/tiles.txt, palette-letter text, 7 x 11 each, in
-    the game's face order (dots, bamboo and characters 1-9, the winds, the
-    dragons, four flowers, four seasons), then the back of a tile. A face
-    may use two colours besides the tile's own.
+  * The tile faces, palette-letter text in the game's face order (dots,
+    bamboo and characters 1-9, the winds, the dragons, four flowers, four
+    seasons), then the back of a tile; a face may use two colours besides the
+    tile's own. tools/art/classic.txt (7 x 11) and classic2x.txt (15 x 23,
+    for the close-up) are the traditional faces, written by tools/faces.py;
+    tools/art/tiles.txt (7 x 11) is the EASY set, with numbers.
   * The pointing hand: tools/art/hand.png (palette-exact, alpha 0 =
     transparent), else palette-letter text in tools/art/hand.txt.
 
@@ -95,27 +97,33 @@ def load_hand():
     return load_png(png) if png.exists() else load_art("hand")[0]
 
 
-def load_tiles():
-    """tools/art/tiles.txt -> a list of faces, each FACE_H rows of palette indices."""
+# The face sets: (art file, face width, face height, C name, embossed). The
+# small traditional faces are left flat: at 7 px an emboss muddies them.
+SETS = [("tiles.txt", 7, 11, "EASY", True), ("classic.txt", 7, 11, "CLASSIC", False),
+        ("classic2x.txt", 15, 23, "BIG", True)]
+
+
+def load_tiles(name="tiles.txt", fw=FACE_W, fh=FACE_H):
+    """tools/art/<name> -> a list of faces, each fh rows of fw palette indices."""
     faces, block = [], []
 
     def flush():
         if not block:
             return
-        if len(block) != FACE_H:
-            raise SystemExit(f"tiles.txt: a row of faces has {len(block)} lines, not {FACE_H}")
+        if len(block) != fh:
+            raise SystemExit(f"{name}: a row of faces has {len(block)} lines, not {fh}")
         cols = [ln.split() for ln in block]
         n = len(cols[0])
         for k in range(n):
             face = []
-            for r in range(FACE_H):
-                if len(cols[r]) != n or len(cols[r][k]) != FACE_W:
-                    raise SystemExit(f"tiles.txt: face {len(faces)} row {r} is not {FACE_W} wide")
+            for r in range(fh):
+                if len(cols[r]) != n or len(cols[r][k]) != fw:
+                    raise SystemExit(f"{name}: face {len(faces)} row {r} is not {fw} wide")
                 face.append([TRANSPARENT if ch == "." else LETTER[ch] for ch in cols[r][k]])
             faces.append(face)
         block.clear()
 
-    for ln in (ART / "tiles.txt").read_text().splitlines():
+    for ln in (ART / name).read_text().splitlines():
         if ln.startswith("#"):
             continue
         if not ln.strip():
@@ -124,7 +132,7 @@ def load_tiles():
         block.append(ln)
     flush()
     if len(faces) != FACES + 1:
-        raise SystemExit(f"tiles.txt: {len(faces)} faces, expected {FACES} and the back")
+        raise SystemExit(f"{name}: {len(faces)} faces, expected {FACES} and the back")
     return faces
 
 
@@ -132,31 +140,32 @@ def emboss(face):
     """The face with its emboss: EMBOSS where the art's shadow falls (down and right
     of an ink pixel, on bare face)."""
     out = [row[:] for row in face]
-    for y in range(1, FACE_H):
-        for x in range(1, FACE_W):
-            if face[y][x] == TRANSPARENT and face[y - 1][x - 1] != TRANSPARENT:
+    for y in range(1, len(face)):
+        for x in range(1, len(face[0])):
+            if face[y][x] == TRANSPARENT and face[y - 1][x - 1] not in (TRANSPARENT, EMBOSS):
                 out[y][x] = EMBOSS
     return out
 
 
-def pack_cell(face, k):
-    """A face -> (24 bytes, ink byte). Pixel values: 0 face, 1 emboss, 2 and 3 the
-    inks (row 0 and column 0, the edge, are 0); two bits a pixel, the left pixel
-    in the low bits; two bytes a row."""
+def pack_cell(face, k, name="tiles.txt"):
+    """A face (fw x fh) -> ((fw+1)*(fh+1)/4 bytes, ink byte). Pixel values: 0 face,
+    1 emboss, 2 and 3 the inks (row 0 and column 0, the edge, are 0); two bits a
+    pixel, the left pixel in the low bits."""
     inks = sorted({c for row in face for c in row if c not in (TRANSPARENT, EMBOSS)})
     if len(inks) > 2:
-        raise SystemExit(f"tiles.txt: face {k} uses {len(inks)} colours ({', '.join(NAMES[c] for c in inks)}); two at most")
+        raise SystemExit(f"{name}: face {k} uses {len(inks)} colours ({', '.join(NAMES[c] for c in inks)}); two at most")
     for c in inks:
         if c in (2, 3, 14, 15):
-            raise SystemExit(f"tiles.txt: face {k} uses {NAMES[c]}, which changes with the table or the animation")
+            raise SystemExit(f"{name}: face {k} uses {NAMES[c]}, which changes with the table or the animation")
     inks += [inks[0] if inks else 0] * (2 - len(inks))
+    cw, ch = len(face[0]) + 1, len(face) + 1
     out = []
-    for y in range(CELL_H):
+    for y in range(ch):
         px = []
-        for x in range(CELL_W):
+        for x in range(cw):
             c = TRANSPARENT if x == 0 or y == 0 else face[y - 1][x - 1]
             px.append(0 if c == TRANSPARENT else 1 if c == EMBOSS else 2 + inks.index(c))
-        for b in range(0, CELL_W, 4):
+        for b in range(0, cw, 4):
             out.append(px[b] | px[b + 1] << 2 | px[b + 2] << 4 | px[b + 3] << 6)
     return out, inks[0] | inks[1] << 4
 
@@ -192,14 +201,15 @@ def preview(name, img, scale=6, bg=3):
     im.resize((w * scale, h * scale), Image.NEAREST).save(PREVIEW / f"{name}.png")
 
 
-def draw_tile(img, x0, y0, face, face_col, shade_col, edge=9, side=12, back=9):
-    """A tile as src/gfx/Tile.cpp draws it at 1x (body, edge, embossed face)."""
-    for dx, dy, c in ((2, 2, back), (1, 1, side)):
-        for y in range(CELL_H):
-            for x in range(CELL_W):
-                img[y0 + y + dy][x0 + x + dx] = c
-    for y in range(CELL_H):
-        for x in range(CELL_W):
+def draw_tile(img, x0, y0, face, face_col, shade_col, edge=9, side=12, back=9, t=1):
+    """A tile as src/gfx/Tile.cpp draws it (body bands t px, edge, embossed face)."""
+    cw, ch = len(face[0]) + 1, len(face) + 1
+    for d, c in ((2 * t, back), (t, side)):
+        for y in range(ch):
+            for x in range(cw):
+                img[y0 + y + d][x0 + x + d] = c
+    for y in range(ch):
+        for x in range(cw):
             if x == 0 or y == 0:
                 c = edge
             else:
@@ -208,20 +218,20 @@ def draw_tile(img, x0, y0, face, face_col, shade_col, edge=9, side=12, back=9):
             img[y0 + y][x0 + x] = c
 
 
-def tile_sheet(faces, scale=8, look=(1, 5, 9, 12, 9)):
-    """Every face as the game draws it: free above, blocked below.
-    look: free face, emboss, edge, side, back."""
+def tile_sheet(name, faces, scale, emb=True):
+    """Every face as the game draws it (above), and flat (below)."""
     per = 9
+    cw, ch = len(faces[0][0]) + 1, len(faces[0]) + 1
+    t = 2 if cw > 8 else 1
+    px, py = cw + 2 * t + 2, ch + 2 * t + 2
     rows = (len(faces) + per - 1) // per
-    w, h = per * 11 + 1, rows * 2 * 15 + 1
-    img = [[3] * w for _ in range(h)]
-    face_col, shade_col, edge, side, back = look
+    img = [[3] * (per * px + 2) for _ in range(rows * 2 * py + 2)]
     for k, face in enumerate(faces):
-        x0, y0 = 1 + (k % per) * 11, 1 + (k // per) * 30
-        e = emboss(face)
-        draw_tile(img, x0, y0, e, face_col, shade_col, edge, side, back)
-        draw_tile(img, x0, y0 + 15, e, 5, 5, edge, side, back)
-    preview("tiles", img, scale)
+        x0, y0 = 1 + (k % per) * px, 1 + (k // per) * 2 * py
+        e = emboss(face) if emb and k < FACES else face
+        draw_tile(img, x0, y0, e, 1, 12, t=t)
+        draw_tile(img, x0, y0 + py, e, 1, 1, t=t)
+    preview(name, img, scale)
 
 
 def c_array(name, data, per_line=16):
@@ -237,36 +247,36 @@ def main():
     decls, defs = [], []
     total = 0
 
-    # Tile faces.
-    faces = load_tiles()
-    cells, inks = [], []
-    for k, face in enumerate(faces):
-        cell, ink = pack_cell(emboss(face) if k < FACES else face, k)
-        cells += cell
-        inks.append(ink)
-    lines = [f"const uint8_t TILE_CELL[{len(faces)}][{CELL_W * CELL_H // 4}] = {{"]
-    for k in range(len(faces)):
-        lines.append("    {" + ", ".join(str(v) for v in cells[k * 24:k * 24 + 24]) + "},")
-    lines.append("};")
-    defs.append("\n".join(lines))
-    defs.append(c_array("TILE_INK", inks))
-    decls.append(f"constexpr uint8_t TILE_BACK = {FACES};                         // the back of a tile, after the faces\n"
-                 f"extern const uint8_t TILE_CELL[{len(faces)}][24];                    // 8x12, 2 bpp: 0 face, 1 emboss, 2 and 3 the inks\n"
-                 f"extern const uint8_t TILE_INK[{len(faces)}];                         // a face's inks: low nibble, high nibble")
-    total += len(cells) + len(inks)
-    tile_sheet(faces)
+    # Tile faces: each set, as cells and their inks.
+    for art, fw, fh, cname, emb in SETS:
+        faces = load_tiles(art, fw, fh)
+        cells, inks = [], []
+        for k, face in enumerate(faces):
+            cell, ink = pack_cell(emboss(face) if emb and k < FACES else face, k, art)
+            cells.append(cell)
+            inks.append(ink)
+        n = len(cells[0])
+        lines = [f"const uint8_t TILE_CELL_{cname}[{len(faces)}][{n}] = {{"]
+        for cell in cells:
+            lines.append("    {" + ", ".join(str(v) for v in cell) + "},")
+        lines.append("};")
+        defs.append("\n".join(lines))
+        defs.append(c_array(f"TILE_INK_{cname}", inks))
+        decls.append(f"extern const uint8_t TILE_CELL_{cname}[{len(faces)}][{n}];   // {fw + 1}x{fh + 1}, 2 bpp: "
+                     f"0 face, 1 emboss, 2 and 3 the inks (tools/art/{art})\n"
+                     f"extern const uint8_t TILE_INK_{cname}[{len(faces)}];          // a face's inks: low nibble, high nibble")
+        total += len(cells) * n + len(inks)
+        tile_sheet(f"tiles_{cname.lower()}", faces, 8 if fw < 10 else 5, emb)
+    decls.insert(0, f"constexpr uint8_t TILE_BACK = {FACES};                         // the back of a tile, after the faces")
 
-    # The pointing hand (span4), fingertip down and fingertip up.
+    # The pointing hand (span4).
     hand = load_hand()
     data = pack_span4(hand)
     defs.append(c_array("HAND", data))
-    up = pack_span4(hand[::-1])
-    defs.append(c_array("HAND_UP", up))
     tip = [x for x, v in enumerate(hand[-1]) if v != TRANSPARENT]
     decls.append("extern const uint8_t HAND[];                                 // span4, fingertip on the bottom row\n"
-                 "extern const uint8_t HAND_UP[];                              // ... turned over: fingertip on the top row\n"
                  f"constexpr uint8_t HAND_TIP = {(tip[0] + tip[-1]) // 2};                           // its column")
-    total += len(data) + len(up)
+    total += len(data)
     preview("hand", hand, 8)
 
     OUT_H.parent.mkdir(parents=True, exist_ok=True)

@@ -3,8 +3,8 @@
 Mahjong solitaire for the [CHGame](https://github.com/bateske/CH32SerialBoot)
 handheld (CH32X035 RISC-V, 128x128 colour LCD, piezo), in the casino style
 of [CHBlackjack](https://github.com/bateske/CHBlackjack) and
-[CHChess](https://github.com/bateske/CHChess): 144 embossed ivory tiles
-stacked on the felt, a close-up camera that whips in round the glove, a
+[CHChess](https://github.com/bateske/CHChess): 144 traditional tiles -
+dots, bamboo, characters, winds and dragons - stacked on the felt, a close-up camera that whips in round the glove, a
 pointing glove that hops between the tiles you can take, pairs that
 fly together and burst into sparks and coins, chips for every pair and a
 streak that pays more the faster you find the next one, and JACKPOT! in
@@ -18,6 +18,10 @@ ARENA, BRIDGE and TWINS.
 | ![pairs](docs/pairs.gif) | ![jackpot](docs/jackpot.gif) | ![shuffle](docs/shuffle.gif) |
 | **The close-up (hold B)** | **The deal** | **Title** |
 | ![zoom](docs/zoom.gif) | ![deal](docs/deal.gif) | ![title](docs/title.gif) |
+
+The faces, as drawn for the close-up:
+
+![tiles](docs/tiles.png)
 
 (Captured from the PC simulator in `tools/chsim`, which runs the real game
 and graphics code and renders what the device shows:
@@ -43,15 +47,15 @@ command line:
     arduino-cli upload  -b CHGame:ch32v:CHGame -p COMx CHMahjong
 
 (`python tools/device.py build` does the same.) Built that way the game is
-34 KB of the 50.9 KB application region.
+40 KB of the 50.9 KB application region.
 
 ## Playing
 
 Take the tiles off the table two at a time. A pair is two tiles with the
 same face (any flower goes with any flower, any season with any season),
 both **free**: nothing lying on any part of them, and nothing touching
-their left side, or nothing their right. Tiles you cannot take yet are
-shaded, so the free ones stand out.
+their left side, or nothing their right. The glove only ever stops on free
+tiles, so it shows you which ones you can take.
 
 | Button | On the table | Elsewhere |
 |---|---|---|
@@ -84,7 +88,8 @@ four a game), UNDO, or a NEW DEAL.
 
 Your best chips and time on each layout are on the layout screen (hold
 SELECT there to clear them). Options: sound, table colour (green, blue,
-red, purple felt), shade (the darker blocked tiles, on or off), view (FULL,
+red, purple felt), tiles (CLASSIC, the traditional faces, or EASY:
+numbers, and a mark for the suit), view (FULL,
 or CLOSE: play in the close-up, and B held shows the whole table) and the
 pace (FUN, or QUICK: no deal animation, shorter flights). Options, bests and a
 game in progress (SAVE + QUIT, then CONTINUE) are saved to flash and
@@ -106,12 +111,14 @@ two flash pages, so saving in one game replaces another's.
   worked out a few pairs a frame under the shuffle rattle, and comes out
   the same however the work is split, so a saved game is just the deal's
   seed and the pairs taken, replayed.
-* **Tiles** are 8x12 faces at 2 bits a pixel (24 bytes each): the face,
-  its emboss (the art's shade, a pixel down and right, which
-  `tools/assets.py` works out from the art) and two inks. They are drawn
-  through colours chosen at draw time, so one set of art is a free tile
-  (embossed), a blocked one (flat and grey), a white flash or a gold
-  shimmer. Each stands on a body drawn as two bands, ivory then wood, like
+* **Tiles** are drawn from faces at 2 bits a pixel: the face, its
+  emboss (the art's shade, a pixel down and right, which `tools/assets.py`
+  works out from the art) and two inks, through colours chosen at draw
+  time - so one set of art is a tile, a white flash or a gold shimmer. The
+  classic set has two sizes: 8x12 (24 bytes a face) for the whole table,
+  left flat because at 7 px an emboss muddies the strokes, and 16x24 (96
+  bytes) for the close-up, drawn pixel for pixel rather than doubled, with
+  the dots and bamboo in their traditional patterns. Each stands on a body drawn as two bands, ivory then wood, like
   a real tile's thickness and backing, and the bottom layer casts a shadow
   on the felt. A tile lying squarely on another hides all of it but its
   body, so only that is drawn.
@@ -151,7 +158,12 @@ C++ compiler (zig, clang++ or g++ on the PATH, `pip install ziglang`, or
   adds the serial protocol for screenshots, injected input and lockstep);
   `python tools/device.py run tools/scripts/device_render.txt out/device`
   measures what a frame costs to draw on the board.
-* **Editing the tiles:** `python tools/sheet.py export` writes
+* **The classic faces:** `python tools/faces.py` writes
+  `tools/art/classic.txt` (7 x 11) and `classic2x.txt` (15 x 23): the dots
+  and bamboo laid out from their patterns, the characters, winds, dragons
+  and the bird as text in the script. Edit either file afterwards (or the
+  script), then `python tools/assets.py`.
+* **The EASY faces:** `python tools/sheet.py export` writes
   `tools/art/sheet.png`, an indexed PNG of every face on the game's
   palette; edit it, then `python tools/sheet.py import` turns it back into
   `tools/art/tiles.txt` and rebuilds the assets. (The text file can be

@@ -9,7 +9,7 @@ namespace stage {
 
 void begin();
 void setQuick(bool on);              // PACE: no deal animation, shorter flights
-void setShade(bool on);              // tiles that cannot be taken yet are drawn darker
+void setFaces(bool numbers);         // the EASY faces (numbers) or the classic ones
 
 void deal(uint8_t layout, uint32_t seed);    // a new table: shuffled, then dealt in
 void resume();                       // the board as it stands (a saved game)

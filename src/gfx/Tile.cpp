@@ -63,14 +63,18 @@ RAMFUNC(tile1) static void draw1(const uint8_t *cell, int x, int y, const uint8_
     }
 }
 
-// Doubled (w 16) at an even x: a source pixel is a framebuffer byte, a
-// source row two framebuffer rows, and the body's bands are 2 px: bytes 8
-// (side) and 9 (backing) right of the face, rows 24-27 below it.
-RAMFUNC(tile2) static void draw2(const uint8_t *cell, int x, int y, const uint8_t *lut, const Style &s) {
-    uint8_t pair[4];
+// Close up (w 16) at an even x: a 16x24 face (big) a pixel a pixel, or the
+// small one doubled - a source pixel a byte, a source row two rows. The
+// body's bands are 2 px: bytes 8 (side) and 9 (backing) right of the face,
+// rows 24-27 below it.
+RAMFUNC(tile2) static void draw2(const uint8_t *cell, const uint8_t *big, int x, int y, const uint8_t *lut,
+                                 const Style &s) {
+    uint8_t pair[4], tab[16];
     for (int k = 0; k < 4; k++) pair[k] = (uint8_t)(lut[k] * 0x11);
+    if (big)
+        for (uint8_t n = 0; n < 16; n++) tab[n] = (uint8_t)(lut[n & 3] | (lut[n >> 2] << 4));
     uint8_t E = (uint8_t)(lut[4] * 0x11), S = (uint8_t)(s.side * 0x11), B = (uint8_t)(s.back * 0x11);
-    bool body = s.side != NONE;
+    bool body = s.side != NONE, face = cell || big;
     int bx = x >> 1;
     uint8_t row[10];
     int loaded = -1;
@@ -78,17 +82,24 @@ RAMFUNC(tile2) static void draw2(const uint8_t *cell, int x, int y, const uint8_
         int yy = y + r;
         if (r >= 2 * H && !body) break;
         if (yy < clipY0 || yy >= clipY1) continue;
-        if (r < 2 * H && cell && (r >> 1) != loaded) {
-            // The source row, once for its two screen rows (or for the one
-            // the clip leaves).
-            int sr = loaded = r >> 1;
-            uint16_t bits = (uint16_t)(cell[2 * sr] | (cell[2 * sr + 1] << 8));
-            for (int k = 0; k < 8; k++, bits >>= 2) row[k] = (sr && k) ? pair[bits & 3] : E;
+        if (r < 2 * H && face) {
+            if (big) {
+                const uint8_t *src = big + 4 * r;
+                for (int k = 0; k < 8; k++) row[k] = tab[(src[k >> 1] >> ((k & 1) * 4)) & 15];
+                if (!r) for (int k = 0; k < 8; k++) row[k] = E;
+                else row[0] = (uint8_t)((row[0] & 0xF0) | (E & 0x0F));
+            } else if ((r >> 1) != loaded) {
+                // The source row, once for its two screen rows (or for the
+                // one the clip leaves).
+                int sr = loaded = r >> 1;
+                uint16_t bits = (uint16_t)(cell[2 * sr] | (cell[2 * sr + 1] << 8));
+                for (int k = 0; k < 8; k++, bits >>= 2) row[k] = (sr && k) ? pair[bits & 3] : E;
+            }
         }
         uint8_t *p = gfx_fb + yy * GFX_FB_STRIDE + bx;
         int k0 = 0, k1 = 8;
         if (r < 2 * H) {
-            if (!cell) k0 = 8;
+            if (!face) k0 = 8;
             if (body && r >= 2) { row[8] = S; row[9] = B; k1 = r >= 4 ? 10 : 9; }
         } else if (r < 2 * H + 2) {
             for (int k = 1; k < 9; k++) row[k] = S;
@@ -103,26 +114,27 @@ RAMFUNC(tile2) static void draw2(const uint8_t *cell, int x, int y, const uint8_
 }
 
 // Any size, any x (the frames of a zoom): a pixel at a time, the body's
-// bands included.
-RAMFUNC(tilen) static void drawN(const uint8_t *cell, int x, int y, const uint8_t *lut, const Style &s, int w) {
-    int h = w * 3 / 2, t = w >= 16 ? 2 : 1;
+// bands included. src is sw x sw*3/2 (an 8x12 or a 16x24 cell).
+RAMFUNC(tilen) static void drawN(const uint8_t *src, int sw, int x, int y, const uint8_t *lut, const Style &s, int w) {
+    int h = w * 3 / 2, t = w >= 16 ? 2 : 1, stride = sw >> 2;
     bool body = s.side != NONE;
     int cols = body ? w + 2 * t : w, rows = body ? h + 2 * t : h;
     uint8_t sc[2 * W];
-    for (int i = 0; i < w; i++) sc[i] = (uint8_t)(i * W / w);
+    for (int i = 0; i < w; i++) sc[i] = (uint8_t)(i * sw / w);
     for (int j = 0; j < rows; j++) {
         int yy = y + j;
         if (yy < clipY0 || yy >= clipY1) continue;
-        int sr = j < h ? j * W / w : 0;
-        uint16_t bits = cell && j < h ? (uint16_t)(cell[2 * sr] | (cell[2 * sr + 1] << 8)) : 0;
+        int sr = j < h ? j * sw / w : 0;
+        const uint8_t *srow = src ? src + sr * stride : nullptr;
         uint8_t *row = gfx_fb + yy * GFX_FB_STRIDE;
         for (int i = 0; i < cols; i++) {
             int xx = x + i;
             if ((unsigned)xx >= (unsigned)GFX_W) continue;
             uint8_t c;
             if (i < w && j < h) {
-                if (!cell) continue;
-                c = (!sr || !sc[i]) ? lut[4] : lut[(bits >> (2 * sc[i])) & 3];
+                if (!src) continue;
+                int k = sc[i];
+                c = (!sr || !k) ? lut[4] : lut[(srow[k >> 2] >> ((k & 3) * 2)) & 3];
             } else if (i >= t && i < w + t && j >= t && j < h + t) c = s.side;
             else if (i >= 2 * t && j >= 2 * t) c = s.back;
             else continue;
@@ -132,11 +144,14 @@ RAMFUNC(tilen) static void drawN(const uint8_t *cell, int x, int y, const uint8_
     }
 }
 
-void draw(const uint8_t *cell, uint8_t inks, int x, int y, const Style &s, int w) {
+void draw(const Face &f, int x, int y, const Style &s, int w) {
+    bool big = f.big && w > W;
+    uint8_t inks = big ? f.bigInks : f.inks;
     uint8_t lut[5] = {s.face, s.shade, (uint8_t)(inks & 15), (uint8_t)(inks >> 4), s.edge};
-    if (!(x & 1) && w == W) draw1(cell, x, y, lut, s);
-    else if (!(x & 1) && w == 2 * W) draw2(cell, x, y, lut, s);
-    else drawN(cell, x, y, lut, s, w);
+    if (!(x & 1) && w == W) draw1(f.cell, x, y, lut, s);
+    else if (!(x & 1) && w == 2 * W) draw2(big ? nullptr : f.cell, big ? f.big : nullptr, x, y, lut, s);
+    else if (big) drawN(f.big, 2 * W, x, y, lut, s, w);
+    else drawN(f.cell, W, x, y, lut, s, w);
 }
 
 }  // namespace tile
