@@ -155,11 +155,15 @@ static const char *const ITEM[3] = {"PLAY", "CONTINUE", "OPTIONS"};
 // streaks across at speed, spinning hard, with a rainbow trail, over
 // everything.
 enum Spin : uint8_t { TUMBLE, FLIP };
+// Calm, like koi: each sinks slowly, swaying from side to side, and turns
+// over a few times a minute.
 struct Faller {
     int16_t x16, y16;                // Q4
     int8_t vx, vy;                   // Q4 a frame
-    uint8_t face, ang, mode;
-    int8_t spin;                     // angle units (256 a turn) a frame
+    uint16_t ang, sway;              // the turn and the sway's phase, Q4 (4096 a cycle)
+    int8_t spin;                     // Q4 angle units (256 a turn) a frame
+    uint8_t swaySpd, amp;            // Q4 phase a frame; px each way
+    uint8_t face, mode;
 };
 static Faller fallers[18], meteor;
 static bool meteorOn;
@@ -173,12 +177,15 @@ static int8_t randSpin(int lo, int hi) {
 static void dropFaller(Faller &f, int y) {
     f.x16 = (int16_t)(fx::rndRange(4, 124) << 4);
     f.y16 = (int16_t)(y << 4);
-    f.vx = (int8_t)fx::rndRange(-2, 3);
-    f.vy = (int8_t)fx::rndRange(6, 16);
+    f.vx = (int8_t)fx::rndRange(-1, 2);
+    f.vy = (int8_t)fx::rndRange(4, 10);
     f.face = (uint8_t)(fx::rnd() % board::FACES);
-    f.ang = (uint8_t)fx::rnd();
+    f.ang = (uint16_t)fx::rnd();
+    f.sway = (uint16_t)fx::rnd();
     f.mode = (uint8_t)(fx::rnd() % 12 ? FLIP : TUMBLE);           // a tumbler is rare
-    f.spin = randSpin(1, 4);
+    f.spin = randSpin(6, 14);                                      // a turn in 5-10 s
+    f.swaySpd = (uint8_t)fx::rndRange(10, 18);                     // a sway in 4-7 s
+    f.amp = (uint8_t)fx::rndRange(3, 9);
 }
 
 static void launchMeteor() {
@@ -186,12 +193,15 @@ static void launchMeteor() {
     bool left = fx::rnd() & 1;
     m.x16 = (int16_t)((left ? fx::rndRange(-10, 50) : fx::rndRange(78, 138)) << 4);
     m.y16 = (int16_t)(-20 << 4);
-    m.vx = (int8_t)(left ? fx::rndRange(10, 28) : -fx::rndRange(10, 28));
-    m.vy = (int8_t)fx::rndRange(70, 100);
+    m.vx = (int8_t)(left ? fx::rndRange(8, 17) : -fx::rndRange(8, 17));
+    m.vy = (int8_t)fx::rndRange(32, 45);
     m.face = (uint8_t)(fx::rnd() % board::FACES);
-    m.ang = (uint8_t)fx::rnd();
+    m.ang = (uint16_t)fx::rnd();
+    m.sway = (uint16_t)fx::rnd();
     m.mode = (uint8_t)(fx::rnd() % 12 ? FLIP : TUMBLE);
-    m.spin = randSpin(12, 20);
+    m.spin = randSpin(28, 48);                                     // a turn in 1.5-2.5 s
+    m.swaySpd = (uint8_t)fx::rndRange(24, 34);
+    m.amp = (uint8_t)fx::rndRange(6, 11);
     meteorOn = true;
 }
 
@@ -209,8 +219,12 @@ static void titleTiles() {
 static void moveFaller(Faller &f) {
     f.x16 = (int16_t)(f.x16 + f.vx);
     f.y16 = (int16_t)(f.y16 + f.vy);
-    f.ang = (uint8_t)(f.ang + f.spin);
+    f.ang = (uint16_t)(f.ang + f.spin);
+    f.sway = (uint16_t)(f.sway + f.swaySpd);
 }
+
+// Where it is now, with its sway.
+static int fallerX(const Faller &f) { return (f.x16 >> 4) + ((fx::isin(f.sway >> 4) * f.amp) >> 8); }
 
 static void titleFallers(uint32_t frame) {
     for (auto &f : fallers) {
@@ -219,7 +233,7 @@ static void titleFallers(uint32_t frame) {
     }
     if (meteorOn) {
         moveFaller(meteor);
-        int x = meteor.x16 >> 4, y = meteor.y16 >> 4;
+        int x = fallerX(meteor), y = meteor.y16 >> 4;
         // The trail: sparks in the casino rainbow, left behind as it flies.
         for (int k = 0; k < 3; k++)
             fx::spawn(k == 2 ? fx::STAR : fx::SPARK, x + fx::rndRange(-4, 5), y + fx::rndRange(-4, 5),
@@ -241,15 +255,16 @@ static void drawFaller(const Faller &f, bool big) {
     tile::Face face = titleFace(f.face);
     const tile::Style *st = &FRONT;
     if (f.mode == TUMBLE) {
-        cs = fx::isin(f.ang + 64);
-        sn = fx::isin(f.ang);
+        uint8_t a = (uint8_t)(f.ang >> 4);
+        cs = fx::isin(a + 64);
+        sn = fx::isin(a);
     } else {
         // A flip: upright, squeezed by the turn; past edge-on, its back.
         cs = 256; sn = 0;
-        xs = fx::isin(f.ang + 64);
+        xs = fx::isin((f.ang >> 4) + 64);
         if (xs < 0) { xs = -xs; face = titleFace(TILE_BACK); st = &BACK; }
     }
-    tile::drawSpun(face, *st, f.x16 >> 4, f.y16 >> 4, cs, sn, xs, big && face.big);
+    tile::drawSpun(face, *st, fallerX(f), f.y16 >> 4, cs, sn, xs, big && face.big);
 }
 
 static uint8_t titleItems(uint8_t *items) {
