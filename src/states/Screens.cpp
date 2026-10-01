@@ -149,18 +149,106 @@ static void newDeal() {
 enum Item : uint8_t { I_PLAY, I_CONTINUE, I_OPTIONS };
 static const char *const ITEM[3] = {"PLAY", "CONTINUE", "OPTIONS"};
 
-struct Faller { int16_t y16; uint8_t x, face, speed; };
-static Faller fallers[12];
+// Tiles tumble down behind the title: some turn in the plane, some flip
+// over like a coin (face, edge, back, edge). Now and then a meteor: one tile
+// streaks across at speed, spinning hard, with a rainbow trail, over
+// everything.
+enum Spin : uint8_t { TUMBLE, FLIP };
+struct Faller {
+    int16_t x16, y16;                // Q4
+    int8_t vx, vy;                   // Q4 a frame
+    uint8_t face, ang, mode;
+    int8_t spin;                     // angle units (256 a turn) a frame
+};
+static Faller fallers[18], meteor;
+static bool meteorOn;
+static uint16_t meteorIn;            // frames until the next
 
-static void dropFaller(Faller &f, int y) {
-    f.x = (uint8_t)(fx::rndRange(1, 59) * 2);
-    f.y16 = (int16_t)(y << 4);
-    f.face = (uint8_t)(fx::rnd() % board::FACES);
-    f.speed = (uint8_t)fx::rndRange(6, 15);
+static int8_t randSpin(int lo, int hi) {
+    int v = fx::rndRange(lo, hi + 1);
+    return (int8_t)(fx::rnd() & 1 ? v : -v);
 }
 
+static void dropFaller(Faller &f, int y) {
+    f.x16 = (int16_t)(fx::rndRange(4, 124) << 4);
+    f.y16 = (int16_t)(y << 4);
+    f.vx = (int8_t)fx::rndRange(-2, 3);
+    f.vy = (int8_t)fx::rndRange(6, 16);
+    f.face = (uint8_t)(fx::rnd() % board::FACES);
+    f.ang = (uint8_t)fx::rnd();
+    f.mode = (uint8_t)(fx::rnd() % 3 == 0 ? FLIP : TUMBLE);
+    f.spin = randSpin(1, 4);
+}
+
+static void launchMeteor() {
+    Faller &m = meteor;
+    bool left = fx::rnd() & 1;
+    m.x16 = (int16_t)((left ? fx::rndRange(-10, 50) : fx::rndRange(78, 138)) << 4);
+    m.y16 = (int16_t)(-20 << 4);
+    m.vx = (int8_t)(left ? fx::rndRange(10, 28) : -fx::rndRange(10, 28));
+    m.vy = (int8_t)fx::rndRange(70, 100);
+    m.face = (uint8_t)(fx::rnd() % board::FACES);
+    m.ang = (uint8_t)fx::rnd();
+    m.mode = (uint8_t)(fx::rnd() & 1 ? FLIP : TUMBLE);
+    m.spin = randSpin(12, 20);
+    meteorOn = true;
+}
+
+static uint8_t titleFull;
+
 static void titleTiles() {
-    for (auto &f : fallers) dropFaller(f, fx::rndRange(-14, 128));
+    // Only the felt between the rails shows (rows ~35-100): they start just
+    // above it, and go round again once below it.
+    for (auto &f : fallers) dropFaller(f, fx::rndRange(22, 100));
+    meteorOn = false;
+    meteorIn = 50;
+    titleFull = 2;
+}
+
+static void moveFaller(Faller &f) {
+    f.x16 = (int16_t)(f.x16 + f.vx);
+    f.y16 = (int16_t)(f.y16 + f.vy);
+    f.ang = (uint8_t)(f.ang + f.spin);
+}
+
+static void titleFallers(uint32_t frame) {
+    for (auto &f : fallers) {
+        moveFaller(f);
+        if (f.y16 > 104 << 4 || f.x16 < -12 << 4 || f.x16 > 140 << 4) dropFaller(f, fx::rndRange(20, 28));
+    }
+    if (meteorOn) {
+        moveFaller(meteor);
+        int x = meteor.x16 >> 4, y = meteor.y16 >> 4;
+        // The trail: sparks in the casino rainbow, left behind as it flies.
+        for (int k = 0; k < 3; k++)
+            fx::spawn(k == 2 ? fx::STAR : fx::SPARK, x + fx::rndRange(-4, 5), y + fx::rndRange(-4, 5),
+                      fx::rndRange(-8, 9) - meteor.vx / 4, fx::rndRange(-12, 3), (uint8_t)fx::rndRange(18, 34),
+                      fx::RAIN[(frame / 2 + k) % 5]);
+        if (y > 150 || x < -30 || x > 158) { meteorOn = false; meteorIn = (uint16_t)fx::rndRange(90, 260); }
+    } else if (!--meteorIn) launchMeteor();
+}
+
+static tile::Face titleFace(uint8_t f) {
+    return opt.faces ? tile::Face{TILE_CELL_EASY[f], TILE_INK_EASY[f], nullptr, 0}
+                     : tile::Face{TILE_CELL_CLASSIC[f], TILE_INK_CLASSIC[f], TILE_CELL_BIG[f], TILE_INK_BIG[f]};
+}
+
+static void drawFaller(const Faller &f, bool big) {
+    static const tile::Style FRONT = {WHITE, SKIN, WOOD, SKIN, WOOD};
+    static const tile::Style BACK = {FELT_LT, FELT_LT, WOOD, SKIN, WOOD};
+    int cs, sn, xs = 256;
+    tile::Face face = titleFace(f.face);
+    const tile::Style *st = &FRONT;
+    if (f.mode == TUMBLE) {
+        cs = fx::isin(f.ang + 64);
+        sn = fx::isin(f.ang);
+    } else {
+        // A flip: upright, squeezed by the turn; past edge-on, its back.
+        cs = 256; sn = 0;
+        xs = fx::isin(f.ang + 64);
+        if (xs < 0) { xs = -xs; face = titleFace(TILE_BACK); st = &BACK; }
+    }
+    tile::drawSpun(face, *st, f.x16 >> 4, f.y16 >> 4, cs, sn, xs, big && face.big);
 }
 
 static uint8_t titleItems(uint8_t *items) {
@@ -185,37 +273,58 @@ static void titleUpdate() {
             case I_OPTIONS: optBack = Scr::Title; go(Scr::Options); break;
         }
     }
-    for (auto &f : fallers) {
-        f.y16 = (int16_t)(f.y16 + f.speed);
-        if (f.y16 > 130 << 4) dropFaller(f, -14);
-    }
+    titleFallers(t);
 }
 
+// The rails (the logo's and the menu's) are drawn again only when the
+// meteor or its sparks are over them, or were last frame (to wipe them), or
+// the menu changes: the framebuffer keeps them. Outlined lettering is the
+// costliest thing on screen.
 static void titleRender(uint32_t frame) {
-    gfx_clear(FELT);
-    for (auto &f : fallers) {
-        static const tile::Style LOOK = {WHITE, SKIN, WOOD, SKIN, WOOD};
-        tile::Face face = opt.faces ? tile::Face{TILE_CELL_EASY[f.face], TILE_INK_EASY[f.face], nullptr, 0}
-                                    : tile::Face{TILE_CELL_CLASSIC[f.face], TILE_INK_CLASSIC[f.face], nullptr, 0};
-        tile::draw(face, f.x, f.y16 >> 4, LOOK);
-    }
-    // The logo on a rail of its own, as the menu: the tiles fall between.
-    gfx_fillRect(0, 0, 128, 34, INK);
-    gfx_hline(0, 34, 128, GOLD);
-    // The logo, in CHBlackjack's lettering and colours: the top rows are
-    // FX_B, so the palette makes it shimmer with no redraw.
-    Mask m = maskBegin(LOGO_W, LOGO_H);
-    maskBlit1(m, LOGO, LOGO_W, LOGO_H);
-    uint8_t ramp[LOGO_H];
-    for (int i = 0; i < LOGO_H; i++) ramp[i] = i < 3 ? FX_B : (i < 12 ? GOLD : WOOD);
-    maskDraw(m, 64 - LOGO_W / 2, 4, INK, WINE, ramp);
-    centred35(26, "~SOLITAIRE~", CYAN);
+    static bool topWas, botWas;
+    static uint32_t menuWas;
     uint8_t items[3], n = titleItems(items);
-    int y0 = 128 - n * 14 - 1;
-    // The menu on a rail of its own: the tiles fall behind it.
-    gfx_fillRect(0, y0 - 5, 128, 128 - y0 + 5, INK);
-    gfx_hline(0, y0 - 6, 128, GOLD);
-    for (uint8_t i = 0; i < n; i++) menuItem(y0 + i * 14, ITEM[items[i]], i == sel, frame);
+    int y0 = 128 - n * 14 - 1, top = 35, bot = y0 - 6;   // the felt between the rails: [top, bot)
+    int lo, hi;
+    bool parts = fx::activeRows(lo, hi);
+    int my = meteor.y16 >> 4;
+    bool full = titleFull != 0;
+    if (titleFull) titleFull--;
+    bool topNow = full || (parts && lo < top) || (meteorOn && my - 20 < top);
+    bool botNow = full || (parts && hi >= bot) || (meteorOn && my + 20 >= bot);
+    uint32_t menu = (uint32_t)n << 8 | sel << 4 | ((frame >> 4) & 1);
+    bool drawTop = topNow || topWas, drawBot = botNow || botWas || menu != menuWas;
+    topWas = topNow;
+    botWas = botNow;
+    menuWas = menu;
+
+    // The felt and the tiles falling on it, every frame.
+    gfx_fillRect(0, top, 128, bot - top, FELT);
+    tile::setClip(top, bot);
+    for (auto &f : fallers) drawFaller(f, false);
+    tile::setClip(0, GFX_H);
+    if (drawTop) {
+        // The logo on a rail of its own, as the menu: the tiles fall between.
+        gfx_fillRect(0, 0, 128, 34, INK);
+        gfx_hline(0, 34, 128, GOLD);
+        // The logo, in CHBlackjack's lettering and colours: the top rows are
+        // FX_B, so the palette makes it shimmer with no redraw.
+        Mask m = maskBegin(LOGO_W, LOGO_H);
+        maskBlit1(m, LOGO, LOGO_W, LOGO_H);
+        uint8_t ramp[LOGO_H];
+        for (int i = 0; i < LOGO_H; i++) ramp[i] = i < 3 ? FX_B : (i < 12 ? GOLD : WOOD);
+        maskDraw(m, 64 - LOGO_W / 2, 4, INK, WINE, ramp);
+        centred35(26, "~SOLITAIRE~", CYAN);
+    }
+    if (drawBot) {
+        // The menu on a rail of its own.
+        gfx_fillRect(0, bot, 128, 128 - bot, INK);
+        gfx_hline(0, bot, 128, GOLD);
+        for (uint8_t i = 0; i < n; i++) menuItem(y0 + i * 14, ITEM[items[i]], i == sel, frame);
+    }
+    // The meteor and its trail, over everything.
+    fx::drawParticles();
+    if (meteorOn) drawFaller(meteor, true);
 }
 
 // ---------------------------------------------------------------------------

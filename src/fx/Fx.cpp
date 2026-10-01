@@ -57,7 +57,7 @@ int rndRange(int lo, int hi) { return hi > lo ? lo + (int)(rnd() % (uint32_t)(hi
 // Particles
 // ---------------------------------------------------------------------------
 struct Particle { int16_t x, y; int8_t vx, vy; uint8_t life, colour, kind, age; };
-static Particle parts[48];
+static Particle parts[64];
 const uint8_t RAIN[5] = {RED, GOLD, FELT_LT, CYAN, BLUE};
 static int16_t floorY = 122 << 4;       // where coins bounce (Q4)
 
@@ -71,7 +71,7 @@ bool particles() {
 void spawn(Kind k, int x, int y, int vx, int vy, uint8_t life, uint8_t colour) {
     Particle *slot = nullptr;
     for (auto &p : parts) if (!p.life) { slot = &p; break; }
-    if (!slot) slot = &parts[rnd() % 48];                 // steal one
+    if (!slot) slot = &parts[rnd() % 64];                 // steal one
     slot->x = (int16_t)(x << 4); slot->y = (int16_t)(y << 4);
     slot->vx = (int8_t)(vx < -127 ? -127 : vx > 127 ? 127 : vx);
     slot->vy = (int8_t)(vy < -127 ? -127 : vy > 127 ? 127 : vy);

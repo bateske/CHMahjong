@@ -144,6 +144,41 @@ RAMFUNC(tilen) static void drawN(const uint8_t *src, int sw, int x, int y, const
     }
 }
 
+void drawSpun(const Face &f, const Style &s, int cx, int cy, int cs, int sn, int xs, bool big) {
+    const uint8_t *cell = big ? f.big : f.cell;
+    uint8_t inks = big ? f.bigInks : f.inks;
+    uint8_t lut[4] = {s.face, s.shade, (uint8_t)(inks & 15), (uint8_t)(inks >> 4)};
+    int w = big ? 2 * W : W, h = big ? 2 * H : H, t = big ? 2 : 1, stride = w >> 2;
+    int ox = w / 2 + t, oy = h / 2 + t;                  // the middle of face and body
+    if (xs < 16) xs = 16;
+    int32_t ix = (65536 + xs / 2) / xs;                  // 1/xs, Q8
+    // Just the box the turned tile covers: half its size, turned.
+    int hw = ((w / 2 + t + 1) * xs) >> 8, hh = h / 2 + t + 1;
+    int acs = cs < 0 ? -cs : cs, asn = sn < 0 ? -sn : sn;
+    int rx = (hw * acs + hh * asn) / 256 + 1, ry = (hw * asn + hh * acs) / 256 + 1;
+    for (int dy = -ry; dy <= ry; dy++) {
+        int yy = cy + dy;
+        if (yy < clipY0 || yy >= clipY1) continue;
+        uint8_t *row = gfx_fb + yy * GFX_FB_STRIDE;
+        // Screen offset -> the tile's own axes: (dx, dy) turned back by the angle.
+        int32_t U = -rx * cs + dy * sn + 128, V = rx * sn + dy * cs + 128;
+        for (int dx = -rx; dx <= rx; dx++, U += cs, V -= sn) {
+            int xx = cx + dx;
+            if ((unsigned)xx >= (unsigned)GFX_W) continue;
+            int x = (int)((U * ix) >> 16) + ox, y = (int)(V >> 8) + oy;
+            uint8_t c;
+            if ((unsigned)x < (unsigned)w && (unsigned)y < (unsigned)h) {
+                if (!cell) continue;
+                c = (!x || !y) ? s.edge : lut[(cell[y * stride + (x >> 2)] >> ((x & 3) * 2)) & 3];
+            } else if (x >= t && x < w + t && y >= t && y < h + t) c = s.side;
+            else if (x >= 2 * t && x < w + 2 * t && y >= 2 * t && y < h + 2 * t) c = s.back;
+            else continue;
+            uint8_t &q = row[xx >> 1];
+            q = (xx & 1) ? (uint8_t)((q & 0x0F) | (c << 4)) : (uint8_t)((q & 0xF0) | c);
+        }
+    }
+}
+
 void draw(const Face &f, int x, int y, const Style &s, int w) {
     bool big = f.big && w > W;
     uint8_t inks = big ? f.bigInks : f.inks;

@@ -40,4 +40,10 @@ struct Face {
 
 void draw(const Face &f, int x, int y, const Style &s, int w = W);
 
+// A tile turned in the plane (cs, sn: the angle's cosine and sine, Q8) and
+// squeezed sideways (xs, Q8, 256 = full width: a flip seen edge-on is
+// small), centred on (cx, cy). big: the 16x24 face (Face::big), else the
+// small one. A pixel at a time, from flash: for the title's falling tiles.
+void drawSpun(const Face &f, const Style &s, int cx, int cy, int cs, int sn, int xs, bool big);
+
 }  // namespace tile
