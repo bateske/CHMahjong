@@ -3,6 +3,8 @@
 #include "Draw.h"
 #include "../RamFunc.h"     // hot loops run from SRAM
 
+static const uint8_t INK_SHADE = 0;        // the palette's INK (gfx/Palette.h)
+
 static inline void plot(uint8_t *p, int x, uint8_t c) {
     if (x & 1) *p = (uint8_t)((*p & 0x0F) | (c << 4));
     else       *p = (uint8_t)((*p & 0xF0) | c);
@@ -218,6 +220,16 @@ RAMFUNC(text35x2) void text35x2(int x, int y, const char *str, uint8_t c) {
         }
         x += 8;
     }
+}
+
+int text35s(int x, int y, const char *str, uint8_t c) {
+    text35(x + 1, y + 1, str, INK_SHADE);
+    return text35(x, y, str, c);
+}
+
+void text35x2s(int x, int y, const char *str, uint8_t c) {
+    text35x2(x + 1, y + 1, str, INK_SHADE);
+    text35x2(x, y, str, c);
 }
 
 int text35Width(const char *str) {

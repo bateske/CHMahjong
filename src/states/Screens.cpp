@@ -106,8 +106,9 @@ static void title35(const char *text, int y, uint8_t scale, uint8_t top, uint8_t
     maskDraw(m, 64 - w / 2, y, INK, shadow, ramp);
 }
 
-static void centred35(int y, const char *s, uint8_t c) { text35(64 - text35Width(s) / 2, y, s, c); }
-static void centred2(int y, const char *s, uint8_t c) { text35x2(64 - text35x2Width(s) / 2, y, s, c); }
+// Embossed: the text over its own shade.
+static void centred35(int y, const char *s, uint8_t c) { text35s(64 - text35Width(s) / 2, y, s, c); }
+static void centred2(int y, const char *s, uint8_t c) { text35x2s(64 - text35x2Width(s) / 2, y, s, c); }
 
 static void menuItem(int y, const char *s, bool on, uint32_t frame) {
     int w = text35x2Width(s);
@@ -193,8 +194,8 @@ static void titleUpdate() {
 static void titleRender(uint32_t frame) {
     gfx_clear(FELT);
     for (auto &f : fallers) {
-        uint8_t lut[4] = {WHITE, WOOD, (uint8_t)(TILE_INK[f.face] & 15), (uint8_t)(TILE_INK[f.face] >> 4)};
-        tile::draw(TILE_CELL[f.face], f.x, f.y16 >> 4, lut, WOOD);
+        static const tile::Style LOOK = {WHITE, SILVER, WOOD, SKIN, WOOD};
+        tile::draw(TILE_CELL[f.face], TILE_INK[f.face], f.x, f.y16 >> 4, LOOK);
     }
     dither(0, 0, 128, 34, INK, 0);
     // The top rows are FX_B, so the palette makes the logo shimmer.
@@ -237,8 +238,8 @@ static void setupUpdate() {
 
 static void arrows(int y, int w, bool on, uint32_t frame) {
     int bob = on ? (frame >> 3) & 1 : 0;
-    text35(64 - w / 2 - 9 - bob, y + 1, "<", GOLD);
-    text35(64 + w / 2 + 6 + bob, y + 1, ">", GOLD);
+    text35s(64 - w / 2 - 9 - bob, y + 1, "<", GOLD);
+    text35s(64 + w / 2 + 6 + bob, y + 1, ">", GOLD);
 }
 
 // A setup choice: boxed while chosen, with arrows to change it.
@@ -275,13 +276,35 @@ static void setupRender(uint32_t frame) {
 // ---------------------------------------------------------------------------
 // Play
 // ---------------------------------------------------------------------------
+// B: a tap puts the tile down (or undoes the last pair) when it is let go;
+// held, it switches the view - the close-up, or with VIEW set to CLOSE the
+// whole table - until it is let go, and the D-pad and A still play.
+static const uint8_t HOLD_B = 10;
+static uint8_t bHeld;
+static bool bUsed, bArmed;           // bArmed: pressed in play (not to close a menu)
+
+static void viewInput() {
+    if (arduboy.justPressed(B_BUTTON)) bUsed = false;
+    if (arduboy.pressed(B_BUTTON)) {
+        if (bHeld < 255) bHeld++;
+        if (bHeld > HOLD_B || arduboy.anyPressed(A_BUTTON | UP_BUTTON | DOWN_BUTTON | LEFT_BUTTON | RIGHT_BUTTON))
+            bUsed = true;
+    } else bHeld = 0;
+    bool other = bHeld && bUsed && overlay == NONE;
+    stage::setZoom((opt.view != 0) != other);
+}
+
 static void playInput() {
     if (arduboy.repeat(UP_BUTTON)) stage::hop(0, -1);
     else if (arduboy.repeat(DOWN_BUTTON)) stage::hop(0, 1);
     else if (arduboy.repeat(LEFT_BUTTON)) stage::hop(-1, 0);
     else if (arduboy.repeat(RIGHT_BUTTON)) stage::hop(1, 0);
     if (arduboy.justPressed(A_BUTTON)) stage::press();
-    if (arduboy.justPressed(B_BUTTON)) stage::back();
+    if (arduboy.justPressed(B_BUTTON)) bArmed = true;
+    if (arduboy.justReleased(B_BUTTON)) {
+        if (bArmed && !bUsed) stage::back();
+        bArmed = false;
+    }
     if (arduboy.justPressed(SELECT_BUTTON)) stage::hint();
 }
 
@@ -344,6 +367,7 @@ static void playUpdate() {
             if (!stage::busy()) playInput();
             break;
     }
+    viewInput();
     stage::update(overlay == NONE);
     if (overlay == NONE && stage::clearedShown()) {
         countResult();
@@ -391,12 +415,15 @@ static void playRender(uint32_t frame) {
 // ---------------------------------------------------------------------------
 // Options
 // ---------------------------------------------------------------------------
-enum Opt : uint8_t { O_SOUND, O_FELT, O_SHADE, O_SPEED, O_BACK, OPT_COUNT };
+enum Opt : uint8_t { O_SOUND, O_FELT, O_SHADE, O_VIEW, O_SPEED, O_BACK, OPT_COUNT };
 static const char *const OPT_TEXT[OPT_COUNT] = {
-    "SOUND|OFF|ON", "TABLE|GREEN|BLUE|RED|PURPLE", "SHADE|ON|OFF", "PACE|FUN|QUICK", "BACK",
+    "SOUND|OFF|ON", "TABLE|GREEN|BLUE|RED|PURPLE", "SHADE|ON|OFF", "VIEW|FULL|CLOSE", "PACE|FUN|QUICK", "BACK",
 };
-// The option's byte in Options: they are in the same order.
-static uint8_t &optByte(uint8_t i) { return ((uint8_t *)&opt)[i]; }
+// The option's byte in Options.
+static uint8_t &optByte(uint8_t i) {
+    static const uint8_t AT[OPT_COUNT - 1] = {0, 1, 2, 5, 3};
+    return ((uint8_t *)&opt)[AT[i]];
+}
 
 static uint8_t optField(const char *s, uint8_t k, char *buf) {
     uint8_t n = 0;
@@ -434,7 +461,7 @@ static void optionsRender(uint32_t frame) {
     feltBackdrop();
     title35("OPTIONS", 7, 3, FX_B, GOLD, WOOD, WINE, 13);
     for (uint8_t i = 0; i < OPT_COUNT; i++) {
-        int y = 29 + i * 14;
+        int y = 28 + i * 13;
         char label[12], value[12];
         optField(OPT_TEXT[i], 0, label);
         if (i == sel) {
@@ -442,9 +469,9 @@ static void optionsRender(uint32_t frame) {
             roundRect(8, y - 3, 112, 15, 3, (frame & 16) ? FX_B : GOLD);
         }
         if (i == O_BACK) { centred2(y, label, i == sel ? GOLD : WHITE); continue; }
-        text35x2(15, y, label, i == sel ? GOLD : WHITE);
+        text35x2s(15, y, label, i == sel ? GOLD : WHITE);
         optField(OPT_TEXT[i], (uint8_t)(optByte(i) + 1), value);
-        text35x2(114 - text35x2Width(value), y, value, i == sel ? WHITE : SILVER);
+        text35x2s(114 - text35x2Width(value), y, value, i == sel ? WHITE : SILVER);
     }
     centred35(108, "CHMAHJONG " CHMJ_VERSION, SILVER);
     centred35(117, "FONT: PRESS PLAY ON TAPE", SILVER);

@@ -30,5 +30,8 @@ int  text35Width(const char *str);
 // The same font doubled (8 px advance, 12 rows with the descender): menus.
 void text35x2(int x, int y, const char *str, uint8_t c);
 inline int text35x2Width(const char *str) { return text35Width(str) * 2; }
+// The same, embossed: drawn over its own shade (INK, a pixel down and right).
+int  text35s(int x, int y, const char *str, uint8_t c);
+void text35x2s(int x, int y, const char *str, uint8_t c);
 extern const uint8_t FONT35[][3];                   // column bytes per glyph
 int  glyph35(char ch);                              // index into FONT35, -1 = none

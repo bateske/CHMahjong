@@ -22,7 +22,27 @@ using board::NONE;
 // the HUD and the plate. Even, so every tile is drawn at an even x.
 static const int OX = 4, OY = 14;
 static const int PLATE_Y = 116;
-static const uint8_t TILE_SIDE = INK;
+static const int PILE_Y0 = 10, PILE_Y1 = 116;        // the rows the pile is drawn in
+
+// How a tile looks: face, emboss, edge, then its body - the side (the tile's
+// thickness) and the backing.
+#ifndef CHMJ_BODY_SIDE
+#define CHMJ_BODY_SIDE SKIN       // ivory; GOLD is a gilded look
+#endif
+static const uint8_t BODY_SIDE = CHMJ_BODY_SIDE, BODY_BACK = WOOD;
+static const tile::Style FREE    = {WHITE, SILVER, WOOD, BODY_SIDE, BODY_BACK};
+static const tile::Style BLOCKED = {SILVER, SILVER, WOOD, BODY_SIDE, BODY_BACK};   // flat: no emboss
+static const tile::Style GLINT   = {FX_B, GOLD, WOOD, BODY_SIDE, BODY_BACK};
+static const tile::Style WHITE_OUT   = {WHITE, WHITE, WHITE, WHITE, WHITE};
+static const tile::Style BACKS   = {FELT_LT, FELT_LT, WOOD, BODY_SIDE, BODY_BACK};
+
+// The view. Close up, tiles are drawn up to twice the size (vw, the tile's
+// width on screen, 8..16 px) around a focus point that follows the glove;
+// a zoom steps vw a frame at a time. Pile coordinates are board::px/py.
+static int vw = tile::W, wantW = tile::W;
+static int32_t fx16, fy16;           // the focus (Q4, pile coordinates)
+static int vFx, vFy, vSx, vSy;       // this frame's: focus, and where it is on screen
+static int pMinX, pMaxX, pMinY, pMaxY;   // the pile's extent
 
 enum Phase : uint8_t { PLAY, SHUFFLING, DROPPING, RESHUFFLE };
 static uint8_t phase;
@@ -48,7 +68,7 @@ struct Mover { int16_t x0, y0, x1, y1; uint8_t tile; };
 static Mover mv[2];
 static uint8_t mvT, mvN;             // mvN: the flight's frames, 0 = none in flight
 static const uint8_t HIT = 4;        // frames they flash white for, together
-static int16_t hitX, hitY;
+static int16_t pairX, pairY;         // where they meet (pile coordinates)
 
 typedef uint8_t Set[(board::MAX_TILES + 7) / 8];
 static Set glint;                    // tiles that shimmer: just freed, put back or shuffled
@@ -72,8 +92,22 @@ static const uint8_t RM_ID[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 
 static inline bool has(const uint8_t *s, uint8_t i) { return (s[i >> 3] >> (i & 7)) & 1; }
 static inline void mark(uint8_t *s, uint8_t i) { s[i >> 3] |= (uint8_t)(1u << (i & 7)); }
 
-static inline int sx(uint8_t i) { return OX + board::px(i); }
-static inline int sy(uint8_t i) { return OY + board::py(i); }
+// Pile coordinates -> screen, for this frame's view. At 1x simply OX + px.
+static inline int VX(int px) { return vSx + (((px - vFx) * vw) >> 3); }
+static inline int VY(int py) { return vSy + (((py - vFy) * vw) >> 3); }
+static inline int sx(uint8_t i) { return VX(board::px(i)); }
+static inline int sy(uint8_t i) { return VY(board::py(i)); }
+static inline int vh() { return vw * 3 / 2; }        // a tile's height on screen
+static inline int vt() { return vw >= 16 ? 2 : 1; }   // its body bands' thickness
+static inline int zs(int n) { return (n * vw) >> 3; } // a pile distance on screen
+
+static void viewSetup() {
+    vFx = (int)(fx16 >> 4);
+    vFy = (int)(fy16 >> 4);
+    // At 1x the focus stays where it is; at 2x it is mid-screen.
+    vSx = OX + vFx + (((64 - OX - vFx) * (vw - tile::W)) >> 3);
+    vSy = OY + vFy + (((63 - OY - vFy) * (vw - tile::W)) >> 3);
+}
 
 void setQuick(bool on) { quick = on; }
 void setShade(bool on) { shade = on; gen++; }
@@ -83,12 +117,37 @@ void invalidate();
 
 static bool gloveOn() { return phase == PLAY && cur != NONE && !mvN && !winT; }
 
-// Where the fingertip belongs: on top of the cursor's tile, or at rest.
+// How far a tile is raised: picked up, or under the glove.
+static int liftOf(uint8_t i) { return zs(i == sel ? 3 : 1); }
+
+// Where the fingertip belongs (screen): on top of the cursor's tile, or at rest.
 static void gloveTarget(int32_t &tx, int32_t &ty) {
     if (idleT >= IDLE_FRAMES) { tx = REST_X << 4; ty = REST_Y << 4; return; }
-    tx = (int32_t)(sx(cur) + 4) << 4;
-    ty = (int32_t)(sy(cur) - (cur == sel ? 3 : 1)) << 4;
+    tx = (int32_t)(sx(cur) + vw / 2) << 4;
+    ty = (int32_t)(sy(cur) - liftOf(cur)) << 4;
 }
+
+// Where the camera looks: the glove's tile (the pile's middle without one),
+// kept far enough in that a close-up shows no bare felt beyond the pile.
+static void focusTarget(int32_t &tx, int32_t &ty) {
+    int x = cur != NONE ? board::px(cur) + 4 : (pMinX + pMaxX) / 2;
+    int y = cur != NONE ? board::py(cur) + 6 : (pMinY + pMaxY) / 2;
+    if (pMaxX - pMinX <= 64) x = (pMinX + pMaxX) / 2;
+    else if (x < pMinX + 32) x = pMinX + 32;
+    else if (x > pMaxX - 32) x = pMaxX - 32;
+    if (pMaxY - pMinY <= 52) y = (pMinY + pMaxY) / 2;
+    else if (y < pMinY + 26) y = pMinY + 26;
+    else if (y > pMaxY - 26) y = pMaxY - 26;
+    tx = (int32_t)x << 4;
+    ty = (int32_t)y << 4;
+}
+
+void setZoom(bool close) {
+    int w = close ? 2 * tile::W : tile::W;
+    if (w != wantW) audio::sfx(close ? Sfx::ZoomIn : Sfx::ZoomOut);
+    wantW = w;
+}
+bool zoomed() { return vw != tile::W; }
 
 bool busy() { return phase != PLAY || mvN || winT || stuckT || board::dealing(); }
 bool clearedShown() { return winT > 150; }
@@ -110,8 +169,14 @@ static void fixCursor() {
 }
 
 static void findCovers() {
+    pMinX = pMinY = 999;
+    pMaxX = pMaxY = -999;
     for (uint8_t i = 0; i < board::count; i++) {
         const board::Pos &p = board::pos[i];
+        if (board::px(i) < pMinX) pMinX = board::px(i);
+        if (board::px(i) + tile::W + 2 > pMaxX) pMaxX = board::px(i) + tile::W + 2;
+        if (board::py(i) < pMinY) pMinY = board::py(i);
+        if (board::py(i) + tile::H + 2 > pMaxY) pMaxY = board::py(i) + tile::H + 2;
         over[i] = NONE;
         for (uint8_t j = (uint8_t)(i + 1); j < board::count; j++) {
             const board::Pos &q = board::pos[j];
@@ -132,6 +197,13 @@ static void reset() {
     invalidate();
 }
 
+// A new table: the camera starts on it, at the zoom it is set to.
+static void settleView() {
+    focusTarget(fx16, fy16);
+    vw = wantW;
+    viewSetup();
+}
+
 void begin() {}
 
 void deal(uint8_t layout, uint32_t seed) {
@@ -139,6 +211,7 @@ void deal(uint8_t layout, uint32_t seed) {
     board::layout = layout;
     board::dealBegin(seed);
     findCovers();
+    settleView();
     shown = 0;
     phase = SHUFFLING;
     audio::sfx(Sfx::Shuffle);
@@ -151,6 +224,7 @@ void resume() {
     phase = PLAY;
     if (board::isFree(board::mark)) cur = board::mark;     // where the glove was
     fixCursor();
+    settleView();
 }
 
 // ---------------------------------------------------------------------------
@@ -176,8 +250,9 @@ static void floatMoney(int32_t v, int x, int y, uint8_t colour) {
 }
 
 static void takePair(uint8_t a, uint8_t b) {
-    // Where they are now: the picked one floating, the other under the glove.
-    int ax = sx(a), ay = sy(a) - 3, bx = sx(b), by = sy(b) - 1;
+    // Where they are now (pile coordinates): the picked one floating, the
+    // other under the glove.
+    int ax = board::px(a), ay = board::py(a) - 3, bx = board::px(b), by = board::py(b) - 1;
     memset(wasFree, 0, sizeof wasFree);
     for (uint8_t i = 0; i < board::count; i++) if (board::isFree(i)) mark(wasFree, i);
     streakWas = board::streakT ? board::streak : 0;
@@ -185,12 +260,12 @@ static void takePair(uint8_t a, uint8_t b) {
     gen++;
     // They meet half way, side by side.
     int mx = ((ax + bx) / 2) & ~1, my = (ay + by) / 2 - 4;
-    if (my < 14) my = 14;
+    if (my < 0) my = 0;
     bool aLeft = ax <= bx;
     mv[0] = Mover{(int16_t)ax, (int16_t)ay, (int16_t)(mx + (aLeft ? -4 : 4)), (int16_t)my, a};
     mv[1] = Mover{(int16_t)bx, (int16_t)by, (int16_t)(mx + (aLeft ? 4 : -4)), (int16_t)my, b};
-    hitX = (int16_t)(mx + 4);
-    hitY = (int16_t)(my + 6);
+    pairX = (int16_t)(mx + 4);
+    pairY = (int16_t)(my + 6);
     mvT = 0;
     mvN = quick ? 8 : 14;
     sel = NONE;
@@ -199,8 +274,9 @@ static void takePair(uint8_t a, uint8_t b) {
     for (uint8_t i = 0; i < board::count; i++) if (board::isFree(i) && !has(wasFree, i)) mark(glint, i);
 }
 
-// The pair meets: the flash, the sparks, the chips.
+// The pair meets: the flash, the sparks, the chips (on screen, where it is).
 static void land() {
+    int hitX = VX(pairX), hitY = VY(pairY);
     fx::burst(fx::SPARK, hitX, hitY, 10, 36, GOLD);
     fx::burst(fx::STAR, hitX, hitY, 4, 24, WHITE);
     fx::fountain(fx::COIN, hitX, hitY, (uint8_t)(1 + board::streak));
@@ -246,7 +322,7 @@ bool undo() {
     mark(glint, a);
     mark(glint, b);
     glintT = 30;
-    if (board::chips != had) floatMoney(board::chips - had, sx(a) + 4, sy(a), RED);
+    if (board::chips != had) floatMoney(board::chips - had, sx(a) + vw / 2, sy(a), RED);
     audio::sfx(Sfx::Undo);
     return true;
 }
@@ -361,9 +437,18 @@ void update(bool playing) {
             } else stuckT = 0;
             break;
     }
+    // The camera: the zoom steps (a whip, as CHChess's), the focus eases
+    // towards the glove's tile.
+    if (vw != wantW) vw += vw < wantW ? 2 : -2;
+    int32_t tx, ty;
+    focusTarget(tx, ty);
+    fx16 += (tx - fx16) >> 2;
+    fy16 += (ty - fy16) >> 2;
+    if (tx - fx16 > -4 && tx - fx16 < 4) fx16 = tx;
+    if (ty - fy16 > -4 && ty - fy16 < 4) fy16 = ty;
+    viewSetup();
     // The glove glides to its tile.
     if (cur != NONE) {
-        int32_t tx, ty;
         gloveTarget(tx, ty);
         if (!gloveSet) { gx16 = tx; gy16 = ty; gloveSet = true; }
         int32_t dx = tx - gx16, dy = ty - gy16;
@@ -379,87 +464,106 @@ void update(bool playing) {
 // ---------------------------------------------------------------------------
 static void drawTable() {
     gfx_fillRect(0, 10, 128, 118, FELT);
+    if (vw != tile::W) { dither(0, 113, 128, 15, FELT_DK, 1); return; }     // close up: no table edges
     dither(0, 12, 128, 2, FELT_DK, 0);
     dither(0, 113, 128, 15, FELT_DK, 1);
     dither(0, 14, 2, 99, FELT_DK, 0);
     dither(126, 14, 2, 99, FELT_DK, 0);
 }
 
-static void drawTile(uint8_t i, int x, int y, uint8_t faceCol, uint8_t side) {
+static void drawTile(uint8_t i, int x, int y, const tile::Style &st) {
     uint8_t f = board::face[i];
-    uint8_t lut[4] = {faceCol, WOOD, (uint8_t)(TILE_INK[f] & 15), (uint8_t)(TILE_INK[f] >> 4)};
-    tile::draw(TILE_CELL[f], x, y, lut, side);
+    tile::draw(TILE_CELL[f], TILE_INK[f], x, y, st, vw);
 }
 
-// A tile raised off the pile: where it sat goes dark, it stands `lift` taller
-// and wears an outline.
-static void drawLifted(uint8_t i, int lift, uint8_t outline) {
-    int x = sx(i), y = sy(i);
-    gfx_fillRect(x, y + tile::H - lift, tile::W, lift, TILE_SIDE);
-    drawTile(i, x, y - lift, WHITE, tile::NO_SIDE);
-    gfx_rect(x - 1, y - lift - 1, tile::W + 2, tile::H + lift + 2, outline);
+static bool onScreen(int x, int y) {
+    int t = 2 * vt();
+    return x < GFX_W && x + vw + t > 0 && y < PILE_Y1 && y + vh() + t > PILE_Y0;
+}
+
+// A tile held up off the pile: it floats `lift` px above where it lay, with
+// its shadow under it, and wears an outline.
+static void drawLifted(uint8_t i, uint8_t outline) {
+    int x = sx(i), y = sy(i), lift = liftOf(i), t = vt();
+    gfx_fillRect(x + 2 * t, y + 2 * t, vw, vh(), BODY_BACK);
+    drawTile(i, x, y - lift, FREE);
+    gfx_rect(x - 1, y - lift - 1, vw + 2, vh() + 2, outline);
 }
 
 static void outlineTile(uint8_t i, uint8_t c) {
-    gfx_rect(sx(i) - 1, sy(i) - 1, tile::W + 2, tile::H + 2, c);
+    gfx_rect(sx(i) - 1, sy(i) - 1, vw + 2, vh() + 2, c);
 }
 
 static void drawPile(uint32_t frame) {
     if (phase == SHUFFLING) return;                      // nothing on the table yet
     uint8_t n = board::count;
     bool glove = gloveOn();
+    int t = vt();
+    tile::setClip(PILE_Y0, PILE_Y1);
+    // The bottom layer's shadow on the felt, down and right.
+    if (phase == PLAY)
+        for (uint8_t i = 0; i < n && board::pos[i].z == 0; i++)
+            if (board::present(i)) gfx_fillRect(sx(i) + 3 * t, sy(i) + 3 * t, vw + t, vh() + t, FELT_DK);
     for (uint8_t i = 0; i < n; i++) {
         if (!board::present(i)) continue;
         int x = sx(i), y = sy(i);
         if (phase == RESHUFFLE) {
             // Face down and rattling about while they are dealt again.
             uint32_t h = (i * 2654435761u) ^ ((frame >> 2) * 40503u);
-            static const uint8_t BACK[4] = {FELT_LT, TILE_SIDE, FELT_LT, GOLD};
-            tile::draw(TILE_CELL[TILE_BACK], x + (int)((h >> 8) & 2) - 2 + 2 * (int)((h >> 12) & 1), y + (int)((h >> 16) % 3) - 1,
-                       BACK, TILE_SIDE);
+            x += (int)((h >> 8) & 2) - 2 + 2 * (int)((h >> 12) & 1);
+            y += (int)((h >> 16) % 3) - 1;
+            if (onScreen(x, y)) tile::draw(TILE_CELL[TILE_BACK], TILE_INK[TILE_BACK], x, y, BACKS, vw);
             continue;
         }
         if (phase == DROPPING) {
             int age = (int)phaseT - i * DROP_FRAMES / n;
             if (age < 0) continue;
-            if (age < FALL) y -= (FALL - age) * (FALL - age);
+            if (age < FALL) y -= zs((FALL - age) * (FALL - age));
         }
-        if (i == sel || (i == cur && glove)) continue;       // drawn raised, afterwards
+        if (!onScreen(x, y)) continue;
+        if (i == sel || (i == cur && glove)) {
+            if (phase == PLAY) continue;                     // drawn raised, afterwards
+        }
         uint8_t top = over[i];
         if (phase == PLAY && top != NONE && board::present(top) && top != sel && !(top == cur && glove)) {
-            tile::draw(nullptr, x, y, nullptr, TILE_SIDE);       // its face is hidden
+            tile::draw(nullptr, 0, x, y, FREE, vw);          // its face is hidden: just its body
             continue;
         }
         bool lit = glintT && has(glint, i);
-        drawTile(i, x, y, lit ? FX_B : (shade && !board::isFree(i)) ? SILVER : WHITE, TILE_SIDE);
+        drawTile(i, x, y, lit ? GLINT : (shade && !board::isFree(i)) ? BLOCKED : FREE);
     }
-    if (phase != PLAY) return;
-    // The twins of the tile in hand, and a hint.
-    if (sel != NONE) {
-        uint8_t list[board::MAX_FREE], k = board::freeList(list);
-        for (uint8_t j = 0; j < k; j++)
-            if (list[j] != cur && board::canMatch(sel, list[j])) outlineTile(list[j], (frame >> 3) & 1 ? CYAN : WHITE);
+    if (phase == PLAY) {
+        // The twins of the tile in hand, and a hint.
+        if (sel != NONE) {
+            uint8_t list[board::MAX_FREE], k = board::freeList(list);
+            for (uint8_t j = 0; j < k; j++)
+                if (list[j] != cur && board::canMatch(sel, list[j])) outlineTile(list[j], (frame >> 3) & 1 ? CYAN : WHITE);
+        }
+        if (hintT && board::present(hintA) && board::present(hintB)) {
+            uint8_t c = (frame >> 2) & 1 ? GOLD : RED;
+            if (hintA != cur && hintA != sel) outlineTile(hintA, c);
+            if (hintB != cur && hintB != sel) outlineTile(hintB, c);
+        }
+        if (sel != NONE && sel != cur) drawLifted(sel, FX_A);
+        if (glove) drawLifted(cur, cur == sel ? FX_A : FX_B);
     }
-    if (hintT && board::present(hintA) && board::present(hintB)) {
-        uint8_t c = (frame >> 2) & 1 ? GOLD : RED;
-        if (hintA != cur && hintA != sel) outlineTile(hintA, c);
-        if (hintB != cur && hintB != sel) outlineTile(hintB, c);
-    }
-    if (sel != NONE && sel != cur) drawLifted(sel, 3, FX_A);
-    if (glove) drawLifted(cur, cur == sel ? 3 : 1, cur == sel ? FX_A : FX_B);
+    tile::setClip(0, GFX_H);
 }
 
 static void drawMovers() {
     if (!mvN) return;
-    static const uint8_t ALL_WHITE[4] = {WHITE, WHITE, WHITE, WHITE};
+    tile::setClip(PILE_Y0 - 8, PILE_Y1);
     for (auto &m : mv) {
         int t = mvT < mvN ? mvT : mvN;
         int e = fx::ease(fx::IN_OUT, t, mvN);
-        int x = m.x0 + (((m.x1 - m.x0) * e) >> 8), y = m.y0 + (((m.y1 - m.y0) * e) >> 8);
-        y -= (fx::isin(t * 128 / mvN) * 6) >> 8;                 // a little hop
-        if (mvT >= mvN) tile::draw(TILE_CELL[board::face[m.tile]], x & ~1, y, ALL_WHITE, WHITE);
-        else drawTile(m.tile, x & ~1, y, WHITE, TILE_SIDE);
+        int x = VX(m.x0 + (((m.x1 - m.x0) * e) >> 8)), y = VY(m.y0 + (((m.y1 - m.y0) * e) >> 8));
+        y -= zs((fx::isin(t * 128 / mvN) * 6) >> 8);         // a little hop
+        if (vw == tile::W) x &= ~1;
+        uint8_t f = board::face[m.tile];
+        if (mvT >= mvN) tile::draw(TILE_CELL[f], 0x11, x, y, WHITE_OUT, vw);
+        else tile::draw(TILE_CELL[f], TILE_INK[f], x, y, FREE, vw);
     }
+    tile::setClip(0, GFX_H);
 }
 
 static void drawGlove(uint32_t frame) {
@@ -467,7 +571,9 @@ static void drawGlove(uint32_t frame) {
     int x = (int)(gx16 >> 4), y = (int)(gy16 >> 4);
     int bob = (fx::isin((int)(frame >> 3) * 40) * 2) >> 8;
     if (tapT) bob = (tapT < 6 ? tapT : 12 - tapT) / 2 + 1;
-    sprite4(HAND, x - HAND_TIP, y - HAND[1] + bob, RM_ID);
+    // As big as the tiles, unless it is resting off the pile.
+    int scale = idleT >= IDLE_FRAMES ? 256 : vw * 32;
+    sprite4(HAND, x - ((HAND_TIP * scale) >> 8), y - ((HAND[1] * scale) >> 8) + zs(bob), RM_ID, scale);
 }
 
 // Words in their colours on a rounded plate centred at y: grow (Q8) is the
@@ -483,7 +589,7 @@ static void plate(const char *const *w, const uint8_t *c, uint8_t n, int y, int 
     int x = 64 - tw / 2;
     for (uint8_t i = 0; i < n; i++) {
         int d = t - 6 - 3 * i;
-        if (d >= 0) text35(x, y + 3 - (d < 3 ? 3 - d : 0), w[i], c[i]);
+        if (d >= 0) text35s(x, y + 3 - (d < 3 ? 3 - d : 0), w[i], c[i]);
         x += text35Width(w[i]) + (w[i][0] ? 1 : 0);
     }
 }
@@ -547,7 +653,10 @@ static uint32_t lastSig;
 
 static uint32_t signature(uint32_t frame, uint32_t ui) {
     int lo, hi;
-    if (fx::activeRows(lo, hi) || mvN || phase != PLAY || tapT || annT) return frame;
+    if (fx::activeRows(lo, hi) || mvN || phase != PLAY || tapT || annT || vw != wantW) return frame;
+    int32_t ftx, fty;
+    focusTarget(ftx, fty);
+    if (ftx != fx16 || fty != fy16) return frame;
     if (cur != NONE) {
         int32_t tx, ty;
         gloveTarget(tx, ty);
@@ -557,6 +666,7 @@ static uint32_t signature(uint32_t frame, uint32_t ui) {
     uint32_t v[] = {
         cur, sel, gen, frame >> 3, hintT ? frame >> 2 : 0, (uint32_t)shown, board::secs(), board::streak, leftShown,
         (uint32_t)(board::streakT * 64 / board::STREAK_FRAMES), glintT != 0, winT != 0, stuckT != 0, ui, shade,
+        (uint32_t)vw, (uint32_t)fx16, (uint32_t)fy16,
     };
     for (uint32_t x : v) h = (h ^ x) * 16777619u;
     return h;

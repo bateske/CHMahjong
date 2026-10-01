@@ -68,13 +68,17 @@ static const Step TITLE[]   = {
     S(1568, 0, 90), S(2093, 0, 90), S(2637, 0, 90), S(3136, 0, 180), REST(40),
     S(2637, 0, 90), S(3136, 0, 360) };
 
+// The camera whipping in and out.
+static const Step ZOOMIN[]  = { S(1200, 3400, 60) };
+static const Step ZOOMOUT[] = { S(3400, 1200, 60) };
+
 struct SfxDef { const Step *steps; uint8_t n, prio; };
 #define DEF(a, p) { a, (uint8_t)(sizeof(a) / sizeof(a[0])), p }
 static const SfxDef DEFS[(int)Sfx::COUNT] = {
     DEF(CURSOR, 0), DEF(SELECT, 1), DEF(DENY, 1), DEF(PICK, 1), DEF(DROP, 1), DEF(CLACK, 0),
     DEF(MATCH1, 2), DEF(MATCH2, 2), DEF(MATCH3, 2), DEF(MATCH4, 2), DEF(MATCH5, 2),
     DEF(COIN, 1), DEF(HINT, 1), DEF(UNDO, 1), DEF(SHUFFLE, 2), DEF(STUCK, 3), DEF(JACKPOT, 4),
-    DEF(WIN, 4), DEF(TITLE, 2),
+    DEF(WIN, 4), DEF(TITLE, 2), DEF(ZOOMIN, 0), DEF(ZOOMOUT, 0),
 };
 
 // --- Sequencer state (shared with the 1 kHz interrupt) ----------------------

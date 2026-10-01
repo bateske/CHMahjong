@@ -9,10 +9,12 @@
   * The pointing hand: tools/art/hand.png (palette-exact, alpha 0 =
     transparent), else palette-letter text in tools/art/hand.txt.
 
-A face becomes an 8 x 12 cell at 2 bits a pixel: the tile's left and top
-edge, then the face. The stage draws it through four colours of its choice
-(face, edge, the two inks), so one cell serves a free tile, a shaded one and
-a flash.
+A face becomes an 8 x 12 cell at 2 bits a pixel: the tile's face, its emboss
+(the art's shadow: face pixels a pixel down and right of the art, worked
+out here), and the two inks; the top row and left column are the tile's
+edge, drawn by the game. The stage draws a cell through colours of its
+choice, so one cell serves a free tile (embossed), a blocked one (flat), a
+flash and a shimmer.
 
 Also writes previews to build/assets/.
 """
@@ -34,6 +36,7 @@ PALETTE = [0x000, 0xFFF, 0x042, 0x173, 0x4B5, 0xBBC, 0xE12, 0x702,
 LETTER = {"k": 0, "w": 1, "d": 2, "f": 3, "g": 4, "s": 5, "r": 6, "m": 7,
           "y": 8, "b": 9, "u": 10, "n": 11, "p": 12, "c": 13, "x": 14, "z": 15}
 TRANSPARENT = 16
+EMBOSS = 17                     # in a face: the art's shadow
 NAMES = ["INK", "WHITE", "FELT_DK", "FELT", "FELT_LT", "SILVER", "RED", "WINE",
          "GOLD", "WOOD", "BLUE", "NAVY", "SKIN", "CYAN", "FX_A", "FX_B"]
 FACES = 42                      # then the back
@@ -125,10 +128,22 @@ def load_tiles():
     return faces
 
 
+def emboss(face):
+    """The face with its emboss: EMBOSS where the art's shadow falls (down and right
+    of an ink pixel, on bare face)."""
+    out = [row[:] for row in face]
+    for y in range(1, FACE_H):
+        for x in range(1, FACE_W):
+            if face[y][x] == TRANSPARENT and face[y - 1][x - 1] != TRANSPARENT:
+                out[y][x] = EMBOSS
+    return out
+
+
 def pack_cell(face, k):
-    """A face -> (24 bytes, ink byte). Pixel values: 0 face, 1 edge, 2 and 3 the inks;
-    two bits a pixel, the left pixel in the low bits; two bytes a row."""
-    inks = sorted({c for row in face for c in row if c != TRANSPARENT})
+    """A face -> (24 bytes, ink byte). Pixel values: 0 face, 1 emboss, 2 and 3 the
+    inks (row 0 and column 0, the edge, are 0); two bits a pixel, the left pixel
+    in the low bits; two bytes a row."""
+    inks = sorted({c for row in face for c in row if c not in (TRANSPARENT, EMBOSS)})
     if len(inks) > 2:
         raise SystemExit(f"tiles.txt: face {k} uses {len(inks)} colours ({', '.join(NAMES[c] for c in inks)}); two at most")
     for c in inks:
@@ -139,11 +154,8 @@ def pack_cell(face, k):
     for y in range(CELL_H):
         px = []
         for x in range(CELL_W):
-            if x == 0 or y == 0:
-                px.append(1)
-            else:
-                c = face[y - 1][x - 1]
-                px.append(0 if c == TRANSPARENT else 2 + inks.index(c))
+            c = TRANSPARENT if x == 0 or y == 0 else face[y - 1][x - 1]
+            px.append(0 if c == TRANSPARENT else 1 if c == EMBOSS else 2 + inks.index(c))
         for b in range(0, CELL_W, 4):
             out.append(px[b] | px[b + 1] << 2 | px[b + 2] << 4 | px[b + 3] << 6)
     return out, inks[0] | inks[1] << 4
@@ -180,23 +192,35 @@ def preview(name, img, scale=6, bg=3):
     im.resize((w * scale, h * scale), Image.NEAREST).save(PREVIEW / f"{name}.png")
 
 
-def tile_sheet(faces, scale=8):
-    """Every face as the game draws it: free (white) above, shaded (silver) below."""
+def draw_tile(img, x0, y0, face, face_col, shade_col, edge=9, side=12, back=9):
+    """A tile as src/gfx/Tile.cpp draws it at 1x (body, edge, embossed face)."""
+    for dx, dy, c in ((2, 2, back), (1, 1, side)):
+        for y in range(CELL_H):
+            for x in range(CELL_W):
+                img[y0 + y + dy][x0 + x + dx] = c
+    for y in range(CELL_H):
+        for x in range(CELL_W):
+            if x == 0 or y == 0:
+                c = edge
+            else:
+                c = face[y - 1][x - 1]
+                c = face_col if c == TRANSPARENT else shade_col if c == EMBOSS else c
+            img[y0 + y][x0 + x] = c
+
+
+def tile_sheet(faces, scale=8, look=(1, 5, 9, 12, 9)):
+    """Every face as the game draws it: free above, blocked below.
+    look: free face, emboss, edge, side, back."""
     per = 9
     rows = (len(faces) + per - 1) // per
     w, h = per * 11 + 1, rows * 2 * 15 + 1
     img = [[3] * w for _ in range(h)]
+    face_col, shade_col, edge, side, back = look
     for k, face in enumerate(faces):
-        for v, (bg, edge) in enumerate(((1, 9), (5, 9))):
-            x0, y0 = 1 + (k % per) * 11, 1 + (k // per) * 30 + v * 15
-            for y in range(CELL_H + 2):
-                for x in range(CELL_W + 2):
-                    if x >= 2 and y >= 2 and (x >= CELL_W or y >= CELL_H):
-                        img[y0 + y][x0 + x] = 9                   # the tile's side
-            for y in range(CELL_H):
-                for x in range(CELL_W):
-                    c = edge if x == 0 or y == 0 else face[y - 1][x - 1]
-                    img[y0 + y][x0 + x] = bg if c == TRANSPARENT else c
+        x0, y0 = 1 + (k % per) * 11, 1 + (k // per) * 30
+        e = emboss(face)
+        draw_tile(img, x0, y0, e, face_col, shade_col, edge, side, back)
+        draw_tile(img, x0, y0 + 15, e, 5, 5, edge, side, back)
     preview("tiles", img, scale)
 
 
@@ -217,7 +241,7 @@ def main():
     faces = load_tiles()
     cells, inks = [], []
     for k, face in enumerate(faces):
-        cell, ink = pack_cell(face, k)
+        cell, ink = pack_cell(emboss(face) if k < FACES else face, k)
         cells += cell
         inks.append(ink)
     lines = [f"const uint8_t TILE_CELL[{len(faces)}][{CELL_W * CELL_H // 4}] = {{"]
@@ -227,7 +251,7 @@ def main():
     defs.append("\n".join(lines))
     defs.append(c_array("TILE_INK", inks))
     decls.append(f"constexpr uint8_t TILE_BACK = {FACES};                         // the back of a tile, after the faces\n"
-                 f"extern const uint8_t TILE_CELL[{len(faces)}][24];                    // 8x12, 2 bpp: 0 face, 1 edge, 2 and 3 the inks\n"
+                 f"extern const uint8_t TILE_CELL[{len(faces)}][24];                    // 8x12, 2 bpp: 0 face, 1 emboss, 2 and 3 the inks\n"
                  f"extern const uint8_t TILE_INK[{len(faces)}];                         // a face's inks: low nibble, high nibble")
     total += len(cells) + len(inks)
     tile_sheet(faces)

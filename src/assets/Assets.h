@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 constexpr uint8_t TILE_BACK = 42;                         // the back of a tile, after the faces
-extern const uint8_t TILE_CELL[43][24];                    // 8x12, 2 bpp: 0 face, 1 edge, 2 and 3 the inks
+extern const uint8_t TILE_CELL[43][24];                    // 8x12, 2 bpp: 0 face, 1 emboss, 2 and 3 the inks
 extern const uint8_t TILE_INK[43];                         // a face's inks: low nibble, high nibble
 extern const uint8_t HAND[];                                 // span4, fingertip on the bottom row
 extern const uint8_t HAND_UP[];                              // ... turned over: fingertip on the top row

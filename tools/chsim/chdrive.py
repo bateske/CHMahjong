@@ -19,7 +19,7 @@ Script lines (# comments allowed):
     idle                run until the game takes input again
     rec start [EVERY] / rec stop NAME   record everything in between to NAME.gif
     tap BTN[+BTN] [H]   hold for H frames (default 3), then release, then 1 frame
-    hold BTN[+BTN]      keep held until `release`
+    hold BTN[+BTN]      keep held until `release` (taps and walks press theirs as well)
     release
     snap NAME           save NAME.png
     gif NAME N [EVERY]  record N frames (every EVERY-th) to NAME.gif
@@ -201,7 +201,8 @@ class Driver:
             self.frames(1)
 
     def buttons(self, mask):
-        self.cmd(f"K {mask:x}")
+        # Buttons held with `hold` stay down under taps and walks.
+        self.cmd(f"K {mask | getattr(self, 'base', 0):x}")
 
     def shot(self):
         self.t.send("S")
@@ -230,8 +231,10 @@ class Driver:
                 self.buttons(0)
                 self.frames(1)
             elif op == "hold":
-                self.buttons(mask_of(args[0]))
+                self.base = mask_of(args[0])
+                self.buttons(0)
             elif op == "release":
+                self.base = 0
                 self.buttons(0)
             elif op == "snap":
                 im = to_image(self.shot(), scale)

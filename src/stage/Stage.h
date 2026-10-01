@@ -15,6 +15,8 @@ void deal(uint8_t layout, uint32_t seed);    // a new table: shuffled, then deal
 void resume();                       // the board as it stands (a saved game)
 
 void update(bool playing);           // once a tick; playing: the clock runs
+void setZoom(bool close);            // the close-up: tiles twice the size round the glove
+bool zoomed();
 // Draws the table unless nothing has changed (then the last frame is shown
 // again, and the palette still animates). ui: anything drawn over it.
 bool render(uint32_t frame, uint32_t ui);

@@ -17,7 +17,8 @@ struct Options {
     uint8_t flat;       // 0: tiles you cannot take yet are shaded; 1: all drawn alike
     uint8_t speed;      // 0 normal, 1 quick (no deal animation, faster matches)
     uint8_t layout;     // last layout chosen
-    uint8_t pad[3];
+    uint8_t view;       // 0 the whole table, 1 close up (B held: the other)
+    uint8_t pad[2];
 };
 
 struct Stats {          // per layout

@@ -9,7 +9,7 @@
 enum class Sfx : uint8_t {
     Cursor, Select, Deny, Pick, Drop, Clack,
     Match1, Match2, Match3, Match4, Match5,      // a pair taken: higher with the streak (keep in order)
-    Coin, Hint, Undo, Shuffle, Stuck, Jackpot, Win, Title,
+    Coin, Hint, Undo, Shuffle, Stuck, Jackpot, Win, Title, ZoomIn, ZoomOut,
     COUNT
 };
 
