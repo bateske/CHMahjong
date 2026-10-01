@@ -35,3 +35,28 @@ snap bridge
 say G 3 31
 wait 150
 snap twins
+# The close-up: hold B.
+say G 0 2026
+wait 150
+rec start 2
+wait 20
+hold B
+wait 30
+tap LEFT
+wait 8
+tap LEFT
+wait 8
+tap UP
+wait 8
+tap UP
+wait 8
+tap A
+wait 8
+tap UP
+wait 8
+tap UP
+wait 12
+wait 20
+release
+wait 30
+rec stop zoom

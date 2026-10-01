@@ -3,8 +3,9 @@
 Mahjong solitaire for the [CHGame](https://github.com/bateske/CH32SerialBoot)
 handheld (CH32X035 RISC-V, 128x128 colour LCD, piezo), in the casino style
 of [CHBlackjack](https://github.com/bateske/CHBlackjack) and
-[CHChess](https://github.com/bateske/CHChess): 144 tiles stacked on the
-felt, a pointing glove that hops between the tiles you can take, pairs that
+[CHChess](https://github.com/bateske/CHChess): 144 embossed ivory tiles
+stacked on the felt, a close-up camera that whips in round the glove, a
+pointing glove that hops between the tiles you can take, pairs that
 fly together and burst into sparks and coins, chips for every pair and a
 streak that pays more the faster you find the next one, and JACKPOT! in
 Blackjack's dancing rainbow letters when the table is cleared.
@@ -15,8 +16,8 @@ ARENA, BRIDGE and TWINS.
 | Taking pairs | The jackpot | No moves: a shuffle |
 |---|---|---|
 | ![pairs](docs/pairs.gif) | ![jackpot](docs/jackpot.gif) | ![shuffle](docs/shuffle.gif) |
-| **Title** | **The deal** | **Layouts** |
-| ![title](docs/title.gif) | ![deal](docs/deal.gif) | ![arena](docs/arena.png) |
+| **The close-up (hold B)** | **The deal** | **Title** |
+| ![zoom](docs/zoom.gif) | ![deal](docs/deal.gif) | ![title](docs/title.gif) |
 
 (Captured from the PC simulator in `tools/chsim`, which runs the real game
 and graphics code and renders what the device shows:
@@ -42,7 +43,7 @@ command line:
     arduino-cli upload  -b CHGame:ch32v:CHGame -p COMx CHMahjong
 
 (`python tools/device.py build` does the same.) Built that way the game is
-31 KB of the 50.9 KB application region.
+34 KB of the 50.9 KB application region.
 
 ## Playing
 
@@ -57,6 +58,7 @@ shaded, so the free ones stand out.
 | D-pad | move the glove to another free tile | menus |
 | A | pick the tile up; on a matching tile, take the pair; on another tile, pick that one up instead; on the same tile, put it down | select |
 | B | put the tile down; with none in hand, undo the last pair | back |
+| B held | the close-up: the camera whips in to twice the size round the glove until you let go; the D-pad and A still play | |
 | SELECT | hint: a pair you can take blinks (costs $25) | |
 | START | pause: resume, shuffle, new deal, save + quit | |
 
@@ -82,8 +84,9 @@ four a game), UNDO, or a NEW DEAL.
 
 Your best chips and time on each layout are on the layout screen (hold
 SELECT there to clear them). Options: sound, table colour (green, blue,
-red, purple felt), shade (the darker blocked tiles, on or off) and the pace
-(FUN, or QUICK: no deal animation, shorter flights). Options, bests and a
+red, purple felt), shade (the darker blocked tiles, on or off), view (FULL,
+or CLOSE: play in the close-up, and B held shows the whole table) and the
+pace (FUN, or QUICK: no deal animation, shorter flights). Options, bests and a
 game in progress (SAVE + QUIT, then CONTINUE) are saved to flash and
 survive re-uploading. CHBlackjack and CHChess keep their saves in the same
 two flash pages, so saving in one game replaces another's.
@@ -103,12 +106,20 @@ two flash pages, so saving in one game replaces another's.
   worked out a few pairs a frame under the shuffle rattle, and comes out
   the same however the work is split, so a saved game is just the deal's
   seed and the pairs taken, replayed.
-* **Tiles** are 8x12 cells at 2 bits a pixel (24 bytes a face), drawn
-  through four colours chosen at draw time - face, edge and two inks - by
-  a loop that runs from SRAM and writes whole bytes (tiles sit at even x).
-  So one set of art is a free tile, a shaded one, a white flash or a
-  shimmer. When nothing moves the pile is not redrawn at all: the outlines
-  are palette colours that animate for free.
+* **Tiles** are 8x12 faces at 2 bits a pixel (24 bytes each): the face,
+  its emboss (the art's shade, a pixel down and right, which
+  `tools/assets.py` works out from the art) and two inks. They are drawn
+  through colours chosen at draw time, so one set of art is a free tile
+  (embossed), a blocked one (flat and grey), a white flash or a gold
+  shimmer. Each stands on a body drawn as two bands, ivory then wood, like
+  a real tile's thickness and backing, and the bottom layer casts a shadow
+  on the felt. A tile lying squarely on another hides all of it but its
+  body, so only that is drawn.
+* **The close-up** draws the pile through a camera: tiles at 1x and 2x
+  are byte-wide copies from SRAM (at 2x a source pixel is a byte, a row two
+  rows), and the whip's in-between sizes are drawn a pixel at a time. When
+  nothing moves the pile is not redrawn at all: the outlines are palette
+  colours that animate for free.
 * **Sound** is a piezo sequencer of short step lists: a clack for each tile
   dealt, two clacks and a chime that climbs with the streak for a pair, a
   rattle for the shuffle, and CHBlackjack's fanfare for the jackpot.
@@ -133,7 +144,9 @@ C++ compiler (zig, clang++ or g++ on the PATH, `pip install ziglang`, or
   pair; `rec` records a GIF across a script; `cal` and `perf` estimate the
   device's render time. Scripts: `ui.txt` (every screen), `match.txt` (a
   pair, frame by frame), `clear.txt` (a whole table to the jackpot),
-  `stuck.txt` (no moves, undo, shuffle, hint), `save.txt` (save, continue).
+  `stuck.txt` (no moves, undo, shuffle, hint), `save.txt` (save, continue),
+  `zoom.txt` (the close-up, and a pair taken in it), `perf.txt` (render
+  cost at both sizes).
 * `python tools/device.py upload [--debug]` - build and upload (`--debug`
   adds the serial protocol for screenshots, injected input and lockstep);
   `python tools/device.py run tools/scripts/device_render.txt out/device`
