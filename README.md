@@ -4,20 +4,30 @@ Mahjong solitaire for the [CHGame](https://github.com/bateske/CH32SerialBoot)
 handheld (CH32X035 RISC-V, 128x128 colour LCD, piezo), in the casino style
 of [CHBlackjack](https://github.com/bateske/CHBlackjack) and
 [CHChess](https://github.com/bateske/CHChess): 144 traditional tiles -
-dots, bamboo, characters, winds and dragons - stacked on the felt, a close-up camera that whips in round the glove, a
-pointing glove that hops between the tiles you can take, pairs that
-fly together and burst into sparks and coins, chips for every pair and a
-streak that pays more the faster you find the next one, and JACKPOT! in
-Blackjack's dancing rainbow letters when the table is cleared.
+dots, bamboo, characters, winds and dragons - stacked on the felt, a
+pointing glove that hops between the tiles you can take, a close-up camera
+that whips in round it, pairs that fly together and burst into sparks and
+coins, chips for every pair and a streak that pays more the faster you
+find the next one, and JACKPOT! in Blackjack's dancing rainbow letters
+when the table is cleared.
 
 Every deal can be cleared, and there are four layouts: the classic TURTLE,
 ARENA, BRIDGE and TWINS.
+
+From the title screen: a deal, a streak up to x5, a hint, the close-up
+(`tools/scripts/gameplay.txt`):
+
+![gameplay](docs/gameplay.gif)
 
 | Taking pairs | The jackpot | No moves: a shuffle |
 |---|---|---|
 | ![pairs](docs/pairs.gif) | ![jackpot](docs/jackpot.gif) | ![shuffle](docs/shuffle.gif) |
 | **The close-up (hold B)** | **The deal** | **Title** |
 | ![zoom](docs/zoom.gif) | ![deal](docs/deal.gif) | ![title](docs/title.gif) |
+
+| Turtle | Arena | Bridge | Twins |
+|---|---|---|---|
+| ![turtle](docs/turtle.png) | ![arena](docs/arena.png) | ![bridge](docs/bridge.png) | ![twins](docs/twins.png) |
 
 The faces, as drawn for the close-up:
 
@@ -89,10 +99,10 @@ four a game), UNDO, or a NEW DEAL.
 Your best chips and time on each layout are on the layout screen (hold
 SELECT there to clear them). Options: sound, table colour (green, blue,
 red, purple felt), tiles (CLASSIC, the traditional faces, or EASY:
-numbers, and a mark for the suit), view (FULL,
-or CLOSE: play in the close-up, and B held shows the whole table) and the
-pace (FUN, or QUICK: no deal animation, shorter flights). Options, bests and a
-game in progress (SAVE + QUIT, then CONTINUE) are saved to flash and
+numbers, and a mark for the suit), view (FULL, or CLOSE: play in the
+close-up, and B held shows the whole table) and the pace (FUN, or QUICK:
+no deal animation, shorter flights). Options, bests and a game in
+progress (SAVE + QUIT, then CONTINUE) are saved to flash and
 survive re-uploading. CHBlackjack and CHChess keep their saves in the same
 two flash pages, so saving in one game replaces another's.
 
@@ -118,10 +128,11 @@ two flash pages, so saving in one game replaces another's.
   classic set has two sizes: 8x12 (24 bytes a face) for the whole table,
   left flat because at 7 px an emboss muddies the strokes, and 16x24 (96
   bytes) for the close-up, drawn pixel for pixel rather than doubled, with
-  the dots and bamboo in their traditional patterns. Each stands on a body drawn as two bands, ivory then wood, like
-  a real tile's thickness and backing, and the bottom layer casts a shadow
-  on the felt. A tile lying squarely on another hides all of it but its
-  body, so only that is drawn.
+  the dots and bamboo in their traditional patterns. Each tile stands on a
+  body drawn as two bands, ivory then wood, like a real tile's thickness
+  and backing, and the bottom layer casts a shadow on the felt. A tile
+  lying squarely on another hides all of it but its body, so only that is
+  drawn.
 * **The close-up** draws the pile through a camera: tiles at 1x and 2x
   are byte-wide copies from SRAM (at 2x a source pixel is a byte, a row two
   rows), and the whip's in-between sizes are drawn a pixel at a time. When
@@ -146,10 +157,12 @@ C++ compiler (zig, clang++ or g++ on the PATH, `pip install ziglang`, or
 * `python tools/chsim/chdrive.py --sim . tools/scripts/clear.txt out/clear` -
   runs the game from a script and writes screenshots, a contact sheet and
   GIFs. `solve N` takes the deal's own next N pairs with the D-pad and A
-  as a player would; `auto N` takes any N pairs; `goto TILE` walks the
+  as a player would, `takehint` the pair a hint is showing; `auto N` takes
+  any N pairs; `goto TILE` walks the
   glove; `say G <layout> <seed>` deals a table, `say M <a> <b>` takes a
   pair; `rec` records a GIF across a script; `cal` and `perf` estimate the
-  device's render time. Scripts: `ui.txt` (every screen), `match.txt` (a
+  device's render time. Scripts: `gameplay.txt` and `showcase.txt` (the
+  pictures above), `ui.txt` (every screen), `match.txt` (a
   pair, frame by frame), `clear.txt` (a whole table to the jackpot),
   `stuck.txt` (no moves, undo, shuffle, hint), `save.txt` (save, continue),
   `zoom.txt` (the close-up, and a pair taken in it), `perf.txt` (render

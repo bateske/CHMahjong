@@ -32,6 +32,7 @@ void hint();                         // SELECT: show a pair (for chips)
 bool undo();
 bool shuffle();                      // deal the tiles left again (for chips)
 bool take(uint8_t a, uint8_t b);     // as picking a then b (scripts)
+bool hinted(uint8_t &a, uint8_t &b); // the pair the hint is showing
 
 bool clearedShown();                 // the table is cleared and the celebration is over
 bool stuckShown();                   // no pair left, and the banner has said so

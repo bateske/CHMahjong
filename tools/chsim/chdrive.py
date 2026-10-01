@@ -14,6 +14,7 @@ Script lines (# comments allowed):
     freegif NAME SECONDS EVERY   the same, sampled into a GIF
     goto TILE [W]       (simulator) walk the glove to tile TILE with D-pad taps
     solve N [W]         (simulator) take the deal's own next N pairs, as a player would
+    takehint [W]        (simulator) take the pair the hint is showing, the same way
     auto N              take N pairs (the first there is each time), no glove work
     state               print the game's state
     idle                run until the game takes input again
@@ -271,13 +272,14 @@ class Driver:
                 self.walk(args[0], int(args[1]) if len(args) > 1 else 8)
             elif op == "idle":
                 self.idle()
-            elif op == "solve":
+            elif op in ("solve", "takehint"):
                 # (simulator) the deal's own way of clearing the table, played
                 # with the D-pad and A: W frames between presses (default 6).
                 gap = int(args[1]) if len(args) > 1 else 6
-                for _ in range(int(args[0])):
+                hint = op == "takehint"
+                for _ in range(1 if hint else int(args[0])):
                     self.idle()
-                    a, b = self.query("O", "NEXT").split()[1:3]
+                    a, b = self.query("W" if hint else "O", "NEXT").split()[1:3]
                     for tile in (a, b):
                         self.walk(tile, gap)
                         self.buttons(mask_of("A"))

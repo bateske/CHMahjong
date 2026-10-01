@@ -299,6 +299,13 @@ static void land() {
     fixCursor();
 }
 
+bool hinted(uint8_t &a, uint8_t &b) {
+    if (!hintT || !board::present(hintA) || !board::present(hintB)) return false;
+    a = hintA;
+    b = hintB;
+    return true;
+}
+
 bool take(uint8_t a, uint8_t b) {
     if (busy() || !board::canMatch(a, b)) return false;
     cur = b;

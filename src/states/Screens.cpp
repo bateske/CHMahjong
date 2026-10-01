@@ -491,6 +491,7 @@ static void optionsRender(uint32_t frame) {
 //   H                      STATE left pairs chips cursor picked busy overlay secs streak
 //   Y                      render cost by section (table pile hud fx), us
 //   O                      (simulator) NEXT a b: the deal's own next pair
+//   W                      (simulator) NEXT a b: the pair the hint is showing
 //   R <tile>               (simulator) the D-pad route to a tile: ROUTE UDLR..
 //   Q                      (simulator) calibration for chdrive's `cal`
 static bool debugHook(char cmd, const char *args) {
@@ -546,6 +547,15 @@ static bool debugHook(char cmd, const char *args) {
             dbg::print(buf);
             return true;
 #ifdef CHSIM
+        case 'W': {
+            uint8_t a, b;
+            if (!stage::hinted(a, b)) return false;
+            p = fmtInt(fmtStr(buf, "NEXT "), a);
+            *p++ = ' ';
+            fmtStr(fmtInt(p, b), "\n");
+            dbg::print(buf);
+            return true;
+        }
         case 'O': {
             // The first pair of the deal's own order still on the table.
             for (uint8_t k = 0; k < board::count / 2; k++) {
