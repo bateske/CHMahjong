@@ -11,6 +11,9 @@ extern const uint8_t TILE_CELL_BIG[43][96];   // 16x24, 2 bpp: 0 face, 1 emboss,
 extern const uint8_t TILE_INK_BIG[43];          // a face's inks: low nibble, high nibble
 extern const uint8_t LOGO[];                                 // the title, 1 bpp MSB-first rows (tools/art/logo.txt)
 constexpr uint8_t LOGO_W = 91, LOGO_H = 18;
-extern const uint8_t *const SPARROW[3];          // span4, facing right: wings up, level, down (tools/art/sparrow.txt)
+// The sparrow's animations (tools/art/bird.txt), facing left: span4 frames.
+struct BirdAnim { const uint8_t *const *frames; uint8_t n, w, h; };
+extern const BirdAnim BIRD[9];
+enum BirdAnimId : uint8_t { B_FLY, B_TAKEOFF, B_IDLE, B_IDLE2, B_IDLE3, B_HOP, B_WALK, B_PECK, B_EAT };
 extern const uint8_t HAND[];                                 // span4, fingertip on the bottom row
 constexpr uint8_t HAND_TIP = 5;                           // its column

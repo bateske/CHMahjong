@@ -20,6 +20,15 @@
 #endif
 #endif
 
+// Device debug builds carry the ~3 KB protocol, and with it the game no
+// longer fits: they leave out the EASY tile faces (TILES is CLASSIC only).
+// The simulator (not flash-bound) and release builds keep everything.
+#if CHMJ_DEBUG && !defined(CHSIM) && !defined(CHMJ_FULL)
+#define CHMJ_LEAN        1
+#else
+#define CHMJ_LEAN        0
+#endif
+
 // Section profiler (dbg::prof + the T command). Opt-in: costs flash.
 #ifndef CHMJ_PROFILE
 #define CHMJ_PROFILE     0

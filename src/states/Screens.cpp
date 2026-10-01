@@ -244,8 +244,10 @@ static void titleFallers(uint32_t frame) {
 }
 
 static tile::Face titleFace(uint8_t f) {
-    return opt.faces ? tile::Face{TILE_CELL_EASY[f], TILE_INK_EASY[f], nullptr, 0}
-                     : tile::Face{TILE_CELL_CLASSIC[f], TILE_INK_CLASSIC[f], TILE_CELL_BIG[f], TILE_INK_BIG[f]};
+#if !CHMJ_LEAN
+    if (opt.faces) return tile::Face{TILE_CELL_EASY[f], TILE_INK_EASY[f], nullptr, 0};
+#endif
+    return tile::Face{TILE_CELL_CLASSIC[f], TILE_INK_CLASSIC[f], TILE_CELL_BIG[f], TILE_INK_BIG[f]};
 }
 
 static void drawFaller(const Faller &f, bool big) {
@@ -500,6 +502,7 @@ static void playUpdate() {
         default:
             if (arduboy.justPressed(START_BUTTON)) { overlay = PAUSE; sel = 0; audio::sfx(Sfx::Select); break; }
             if (!stage::busy()) playInput();
+            else if (arduboy.justPressedMask()) stage::shoo();
             break;
     }
     viewInput();

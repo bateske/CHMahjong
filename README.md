@@ -8,8 +8,10 @@ dots, bamboo, characters, winds and dragons - stacked on the felt, a
 pointing glove that hops between the tiles you can take, a close-up camera
 that whips in round it, pairs that fly together and burst into sparks and
 coins, chips for every pair and a streak that pays more the faster you
-find the next one, and MAHJONG! in Blackjack's dancing rainbow letters,
-with a sparrow fluttering across, when the table is cleared.
+find the next one, and MAHJONG! in Blackjack's dancing rainbow letters
+when the table is cleared - and a sparrow comes down to visit the empty
+felt: it lands, hops about, pecks, looks round, eats, flicks its tail and
+flies off (any button shoos it away sooner).
 
 Every deal can be cleared, and there are four layouts: the classic TURTLE,
 ARENA, BRIDGE and TWINS.
@@ -142,6 +144,11 @@ two flash pages, so saving in one game replaces another's.
   dealt, two clacks and a chime that climbs with the streak for a pair, a
   rattle for the shuffle, CHBlackjack's fanfare for a cleared table, and
   the sparrow's chirp.
+* **The sparrow** is nine of its animations (39 frames, about 4.8 KB) cut
+  from its animation sheet by `tools/bird.py`, which finds each pixel's
+  5x5 block in the GIF and maps the colours onto the game's palette. Its
+  visit is a list of acts - an animation, the order of its frames, how
+  fast, which way it moves - and the game mirrors it to face either way.
 
 ## Development
 
@@ -188,6 +195,9 @@ C++ compiler (zig, clang++ or g++ on the PATH, `pip install ziglang`, or
   fits the screen, nothing hangs in the air, a deal can be found) and
   writes `src/game/Layouts.cpp`. Saved games replay their deal: bump
   `VERSION` in `src/save/Save.cpp` when a layout or the deal changes.
+* **The sparrow:** `python tools/bird.py [Bird.gif]` writes
+  `tools/art/bird.txt` (palette letters, each animation's frames); edit
+  that, then `python tools/assets.py`.
 * **The title:** `tools/art/logo.txt`, a `#` for each pixel of the
   lettering; the title screen tints it as CHBlackjack's logo.
 * `python tools/assets.py` packs the art, `python tools/audio/preview.py

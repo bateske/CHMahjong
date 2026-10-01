@@ -35,6 +35,7 @@ bool take(uint8_t a, uint8_t b);     // as picking a then b (scripts)
 bool hinted(uint8_t &a, uint8_t &b); // the pair the hint is showing
 
 bool clearedShown();                 // the table is cleared and the celebration is over
+void shoo();                         // a button while the sparrow visits: off it flies
 bool stuckShown();                   // no pair left, and the banner has said so
 
 #if CHMJ_DEBUG

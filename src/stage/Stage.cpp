@@ -77,10 +77,38 @@ static Set wasFree;
 static uint8_t hintA = NONE, hintB = NONE, hintT;
 static int32_t shown;                // the chips on the HUD, rolling towards board::chips
 static uint8_t winT, stuckT;         // the cleared and the no-moves sequences
-// A cleared table: a sparrow flutters across under the banner (the 1 of
-// bamboo's bird), flapping and gliding.
-static uint8_t birdT;                // frames in flight, 0 = none
-static int16_t birdX16;
+// A cleared table: a sparrow (the 1 of bamboo's bird) visits it. It flies
+// in and lands, idles, hops and pecks, turns and looks about, walks, eats,
+// flicks its tail and flies off; a button shoos it away sooner. Each act is
+// one of its animations (tools/art/bird.txt) played through a sequence of
+// its frames, a few ticks a frame, moving it along as it goes.
+struct Act { uint8_t anim, ticks, reps; int8_t dx; const uint8_t *seq; uint8_t len; };
+static const uint8_t SQ_LAND[] = {5, 4, 3, 2, 1, 0}, SQ_IDLE[] = {0, 1, 2, 3}, SQ_HOP[] = {0, 1, 2, 3},
+                     SQ_PECK[] = {0, 1}, SQ_LOOK[] = {0, 1, 2, 3, 4}, SQ_WALK[] = {0, 1, 0, 2},
+                     SQ_EAT[] = {0, 1, 2, 3, 4, 4, 4, 4, 5}, SQ_FLICK[] = {0, 1, 2, 3, 4, 5, 4, 6},
+                     SQ_TAKEOFF[] = {0, 1, 2, 3, 4, 5}, SQ_FLY[] = {0, 1};
+#define ACT(a, t, r, dx, sq) { a, t, r, dx, sq, (uint8_t)sizeof(sq) }
+enum : uint8_t { A_IN, A_LAND, A_IDLE, A_HOP, A_PECK, A_LOOK, A_WALK, A_EAT, A_FLICK, A_TAKEOFF, A_OUT, A_DONE };
+static const Act ACTS[A_DONE] = {
+    ACT(B_FLY, 4, 0, 0, SQ_FLY),             // in: flown along a curve (updateBird)
+    ACT(B_TAKEOFF, 4, 1, 0, SQ_LAND),        // landing: the take-off backwards
+    ACT(B_IDLE, 7, 2, 0, SQ_IDLE),
+    ACT(B_HOP, 5, 2, 10, SQ_HOP),            // dx: Q4 a tick, the way it faces
+    ACT(B_PECK, 5, 4, 0, SQ_PECK),
+    ACT(B_IDLE3, 7, 1, 0, SQ_LOOK),          // turned round first
+    ACT(B_WALK, 6, 2, 6, SQ_WALK),
+    ACT(B_EAT, 5, 1, 0, SQ_EAT),
+    ACT(B_IDLE2, 6, 1, 0, SQ_FLICK),
+    ACT(B_TAKEOFF, 4, 1, 0, SQ_TAKEOFF),
+    ACT(B_FLY, 4, 0, 0, SQ_FLY),             // out: until off the screen
+};
+static const int GROUND = 104;               // where its feet are
+static uint8_t birdAct = A_DONE, birdStep;   // the act, and how many frames into it
+static uint8_t birdTick;
+static bool birdRight;                       // facing right (drawn mirrored)
+static int16_t birdX16, birdY16;             // its beak's side, and its feet (Q4)
+static int16_t birdFromX, birdFromY;
+static bool birdOn() { return birdAct != A_DONE; }
 static char ann[14];                 // a call-out on the plate
 static uint8_t annT;
 static const uint8_t ANN_FRAMES = 60;
@@ -118,7 +146,9 @@ void setFaces(bool numbers) { easy = numbers; gen++; }
 
 // Face f in the chosen set; the classic one has its own art for close up.
 static tile::Face faceOf(uint8_t f) {
+#if !CHMJ_LEAN
     if (easy) return tile::Face{TILE_CELL_EASY[f], TILE_INK_EASY[f], nullptr, 0};
+#endif
     return tile::Face{TILE_CELL_CLASSIC[f], TILE_INK_CLASSIC[f], TILE_CELL_BIG[f], TILE_INK_BIG[f]};
 }
 uint8_t cursor() { return cur; }
@@ -160,7 +190,7 @@ void setZoom(bool close) {
 bool zoomed() { return vw != tile::W; }
 
 bool busy() { return phase != PLAY || mvN || winT || stuckT || board::dealing(); }
-bool clearedShown() { return winT > 150; }
+bool clearedShown() { return winT > 150 && !birdOn(); }
 bool stuckShown() { return stuckT > 70; }
 
 static void announce(const char *text) {
@@ -199,7 +229,8 @@ static void reset() {
     phaseT = 0;
     cur = sel = NONE;
     gloveSet = false;
-    tapT = idleT = mvN = mvT = glintT = hintT = winT = stuckT = annT = birdT = 0;
+    tapT = idleT = mvN = mvT = glintT = hintT = winT = stuckT = annT = 0;
+    birdAct = A_DONE;
     memset(glint, 0, sizeof glint);
     gen++;
     fx::clear();
@@ -380,6 +411,92 @@ bool shuffle() {
     return true;
 }
 
+static void nextAct() {
+    birdAct++;
+    birdStep = birdTick = 0;
+    if (birdAct == A_LOOK) {
+        // Turn round: the beak goes to the other end.
+        birdRight = !birdRight;
+        birdX16 = (int16_t)(birdX16 + ((BIRD[B_IDLE3].w - 1) << 4) * (birdRight ? 1 : -1));
+    }
+    if (birdAct == A_LAND) audio::sfx(Sfx::Chirp);
+    if (birdAct == A_TAKEOFF) audio::sfx(Sfx::ZoomIn);
+}
+
+static void updateBird() {
+    if (!birdOn()) return;
+    const Act &a = ACTS[birdAct];
+    if (++birdTick >= a.ticks) {
+        birdTick = 0;
+        birdStep++;
+        if (birdAct == A_PECK && (birdStep & 1)) audio::sfx(Sfx::Cursor);    // tap, tap
+    }
+    int dir = birdRight ? 1 : -1;
+    if (birdAct == A_IN) {
+        // A swoop down from the corner to the middle of the table.
+        static const int IN_T = 72;
+        int t = birdStep * a.ticks + birdTick, e = fx::ease(fx::OUT_CUBIC, t, IN_T);
+        birdX16 = (int16_t)(birdFromX + ((((70 << 4) - birdFromX) * e) >> 8));
+        birdY16 = (int16_t)(birdFromY + ((((GROUND << 4) - birdFromY) * e) >> 8));
+        if (t >= IN_T) nextAct();
+        return;
+    }
+    if (birdAct == A_OUT) {
+        birdX16 = (int16_t)(birdX16 + 34 * dir);
+        birdY16 = (int16_t)(birdY16 - 20);
+        if (birdY16 < (-30 << 4) || birdX16 < (-30 << 4) || birdX16 > (160 << 4)) birdAct = A_DONE;
+        return;
+    }
+    birdX16 = (int16_t)(birdX16 + a.dx * dir);
+    if (birdAct == A_TAKEOFF && birdStep >= 3) birdY16 = (int16_t)(birdY16 - 8);
+    if (birdStep >= a.len * a.reps) nextAct();
+}
+
+// The sparrow's frame now, and where to draw it.
+static const uint8_t *birdFrame(int &x, int &y) {
+    const Act &a = ACTS[birdAct];
+    const BirdAnim &an = BIRD[a.anim];
+    const uint8_t *spr = an.frames[a.seq[birdStep % a.len]];
+    int ax = birdX16 >> 4, ay = birdY16 >> 4;
+    x = birdRight ? ax - an.w + 1 : ax;      // the beak at ax, whichever way it faces
+    y = ay - an.h + 1;
+    return spr;
+}
+
+static void drawBird() {
+    if (!birdOn()) return;
+    int x, y;
+    const uint8_t *d = birdFrame(x, y);
+    int w = d[0], h = d[1];
+    // Its shadow on the felt, while it is down.
+    if (birdAct != A_IN && birdAct != A_OUT) {
+        int sw = BIRD[ACTS[birdAct].anim].w - 6;
+        int cx = (birdX16 >> 4) + (birdRight ? -(sw / 2 + 3) : sw / 2 + 3);
+        gfx_hline(cx - sw / 2, GROUND + 1, sw, FELT_DK);
+        gfx_hline(cx - sw / 2 + 2, GROUND + 2, sw - 4, FELT_DK);
+    }
+    // span4, mirrored when it faces right.
+    d += 2;
+    for (int j = 0; j < h; j++) {
+        uint8_t n = *d++;
+        int px = 0;
+        for (uint8_t i = 0; i < n; i++) {
+            uint8_t b = *d++;
+            int len = (b >> 4) + 1;
+            if ((b & 15) != 15) gfx_hline(birdRight ? x + w - px - len : x + px, y + j, len, b & 15);
+            px += len;
+        }
+    }
+}
+
+// Shoo: away it goes (a button, while it is here).
+void shoo() {
+    if (!birdOn() || birdAct == A_IN || birdAct >= A_TAKEOFF) return;
+    birdAct = A_TAKEOFF;
+    birdStep = birdTick = 0;
+    audio::sfx(Sfx::ZoomIn);
+}
+
 void update(bool playing) {
     phaseT++;
     if (tapT) tapT--;
@@ -443,7 +560,11 @@ void update(bool playing) {
                 }
                 if (winT < 255) winT++;
                 if (winT == 60 || winT == 110) fx::fountain(fx::COIN, winT == 60 ? 30 : 98, 90, 10);
-                if (winT == 30) { birdT = 1; birdX16 = -34 << 4; }
+                if (winT == 30) {
+                    // Here it comes, from the right.
+                    birdAct = A_IN; birdStep = birdTick = 0; birdRight = false;
+                    birdFromX = 132 << 4; birdFromY = 30 << 4;
+                }
             } else if (board::stuck()) {
                 if (!stuckT) {
                     fx::banner("NO MOVES", fx::B_RED, 58, 80);
@@ -455,12 +576,7 @@ void update(bool playing) {
             } else stuckT = 0;
             break;
     }
-    if (birdT) {
-        birdX16 = (int16_t)(birdX16 + 30);
-        if (birdT < 255) birdT++;
-        if (birdT == 12) audio::sfx(Sfx::Chirp);
-        if (birdX16 > 132 << 4) birdT = 0;
-    }
+    updateBird();
     // The camera: the zoom steps (a whip, as CHChess's), the focus eases
     // towards the glove's tile.
     if (vw != wantW) vw += vw < wantW ? 2 : -2;
@@ -590,18 +706,6 @@ static void drawMovers() {
     tile::setClip(0, GFX_H);
 }
 
-// Flap-flap-glide, as sparrows fly: wings up, level, down, level a few
-// times, then level for a while, the bird rising as it flaps and sinking as
-// it glides.
-static void drawBird() {
-    if (!birdT) return;
-    static const uint8_t FLAP[4] = {0, 1, 2, 1};
-    int p = birdT % 40;
-    uint8_t f = p < 20 ? FLAP[(p / 3) & 3] : 1;
-    int y = 76 + ((fx::isin(birdT * 6 + 64) * 5) >> 8);
-    sprite4(SPARROW[f], birdX16 >> 4, y, RM_ID, 512);      // twice its size
-}
-
 static void drawGlove(uint32_t frame) {
     if (!gloveOn() || !gloveSet) return;
     int x = (int)(gx16 >> 4), y = (int)(gy16 >> 4);
@@ -689,7 +793,7 @@ static uint32_t lastSig;
 
 static uint32_t signature(uint32_t frame, uint32_t ui) {
     int lo, hi;
-    if (fx::activeRows(lo, hi) || mvN || phase != PLAY || tapT || annT || vw != wantW || birdT) return frame;
+    if (fx::activeRows(lo, hi) || mvN || phase != PLAY || tapT || annT || vw != wantW || birdOn()) return frame;
     int32_t ftx, fty;
     focusTarget(ftx, fty);
     if (ftx != fx16 || fty != fy16) return frame;
