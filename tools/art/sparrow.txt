@@ -1,0 +1,44 @@
+# The sparrow that flies across a cleared table, facing right: three frames,
+# wings up, level and down. k ink, b wood (back, wings, cap), w white
+# (cheek), p skin (breast), y gold (beak), '.' clear. tools/assets.py packs it.
+....kk..........
+...kbbk.........
+...kbbbk........
+....kbbbk.kkkk..
+....kbbbbkbbbbk.
+.....kbbbkbkbbbk
+kkk...kbbkwwwkyk
+kbbk.kbbbkwwkpk.
+.kbbkbbbbbbbkppk
+..kbbbbbbbbbppk.
+...kbbbbbbbpppk.
+....kkkppppppk..
+......kkkkkkk...
+
+................
+................
+................
+..........kkkk..
+.........kbbbbk.
+.........kbkbbbk
+kkk.....kkwwwkyk
+kbbk..kkbbwwkpk.
+.kbbkkbkbkbkkppk
+..kbbbbbbbbbppk.
+...kbbbbbbbpppk.
+....kkkppppppk..
+......kkkkkkk...
+
+................
+................
+................
+..........kkkk..
+.........kbbbbk.
+.........kbkbbbk
+kkk.....kbwwwkyk
+kbbk...kbbwwkpk.
+.kbbkkkbbbbbkppk
+..kbbbbbbbbbppk.
+...kbbbbbbbbpk..
+....kkbbbbbbkk..
+......kbbbbk....

@@ -8,8 +8,8 @@ dots, bamboo, characters, winds and dragons - stacked on the felt, a
 pointing glove that hops between the tiles you can take, a close-up camera
 that whips in round it, pairs that fly together and burst into sparks and
 coins, chips for every pair and a streak that pays more the faster you
-find the next one, and JACKPOT! in Blackjack's dancing rainbow letters
-when the table is cleared.
+find the next one, and MAHJONG! in Blackjack's dancing rainbow letters,
+with a sparrow fluttering across, when the table is cleared.
 
 Every deal can be cleared, and there are four layouts: the classic TURTLE,
 ARENA, BRIDGE and TWINS.
@@ -19,9 +19,9 @@ From the title screen: a deal, a streak up to x5, a hint, the close-up
 
 ![gameplay](docs/gameplay.gif)
 
-| Taking pairs | The jackpot | No moves: a shuffle |
+| Taking pairs | Cleared: MAHJONG! | No moves: a shuffle |
 |---|---|---|
-| ![pairs](docs/pairs.gif) | ![jackpot](docs/jackpot.gif) | ![shuffle](docs/shuffle.gif) |
+| ![pairs](docs/pairs.gif) | ![mahjong](docs/mahjong.gif) | ![shuffle](docs/shuffle.gif) |
 | **The close-up (hold B)** | **The deal** | **Title** |
 | ![zoom](docs/zoom.gif) | ![deal](docs/deal.gif) | ![title](docs/title.gif) |
 
@@ -140,7 +140,8 @@ two flash pages, so saving in one game replaces another's.
   colours that animate for free.
 * **Sound** is a piezo sequencer of short step lists: a clack for each tile
   dealt, two clacks and a chime that climbs with the streak for a pair, a
-  rattle for the shuffle, and CHBlackjack's fanfare for the jackpot.
+  rattle for the shuffle, CHBlackjack's fanfare for a cleared table, and
+  the sparrow's chirp.
 
 ## Development
 
@@ -163,7 +164,7 @@ C++ compiler (zig, clang++ or g++ on the PATH, `pip install ziglang`, or
   pair; `rec` records a GIF across a script; `cal` and `perf` estimate the
   device's render time. Scripts: `gameplay.txt` and `showcase.txt` (the
   pictures above), `ui.txt` (every screen), `match.txt` (a
-  pair, frame by frame), `clear.txt` (a whole table to the jackpot),
+  pair, frame by frame), `clear.txt` (a whole table to MAHJONG!),
   `stuck.txt` (no moves, undo, shuffle, hint), `save.txt` (save, continue),
   `zoom.txt` (the close-up, and a pair taken in it), `perf.txt` (render
   cost at both sizes).

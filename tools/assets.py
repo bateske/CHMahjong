@@ -299,6 +299,15 @@ def main():
     total += len(data)
     preview("logo", [[1 if v else TRANSPARENT for v in r] for r in logo], 4)
 
+    # The sparrow (span4), three wing frames.
+    birds = load_art("sparrow")
+    for k, img in enumerate(birds):
+        data = pack_span4(img)
+        defs.append(c_array(f"SPARROW{k}", data))
+        total += len(data)
+    defs.append(f"const uint8_t *const SPARROW[{len(birds)}] = {{" + ", ".join(f"SPARROW{k}" for k in range(len(birds))) + "};")
+    decls.append(f"extern const uint8_t *const SPARROW[{len(birds)}];          // span4, facing right: wings up, level, down (tools/art/sparrow.txt)")
+
     # The pointing hand (span4).
     hand = load_hand()
     data = pack_span4(hand)

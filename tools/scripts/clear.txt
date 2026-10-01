@@ -1,5 +1,5 @@
 # A whole table cleared the deal's own way (Twins, the quickest), to the
-# jackpot and the result panel, then a new deal from it.
+# MAHJONG! (and the sparrow) and the result panel, then a new deal from it.
 say G 3 777
 wait 150
 snap dealt
@@ -10,9 +10,9 @@ solve 35 4
 snap last_pair
 solve 1 4
 wait 20
-snap jackpot
+snap mahjong
 wait 60
-snap jackpot2
+snap mahjong2
 wait 120
 snap result
 state

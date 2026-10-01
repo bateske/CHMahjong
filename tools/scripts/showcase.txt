@@ -18,14 +18,14 @@ wait 120
 tap A
 wait 110
 rec stop shuffle
-# The last pairs of a table, and the jackpot.
+# The last pairs of a table: MAHJONG! and the sparrow.
 say G 3 777
 wait 150
 solve 69 2
 rec start 2
 solve 3 8
 wait 230
-rec stop jackpot
+rec stop mahjong
 say G 1 31
 wait 150
 snap arena

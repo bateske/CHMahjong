@@ -77,6 +77,10 @@ static Set wasFree;
 static uint8_t hintA = NONE, hintB = NONE, hintT;
 static int32_t shown;                // the chips on the HUD, rolling towards board::chips
 static uint8_t winT, stuckT;         // the cleared and the no-moves sequences
+// A cleared table: a sparrow flutters across under the banner (the 1 of
+// bamboo's bird), flapping and gliding.
+static uint8_t birdT;                // frames in flight, 0 = none
+static int16_t birdX16;
 static char ann[14];                 // a call-out on the plate
 static uint8_t annT;
 static const uint8_t ANN_FRAMES = 60;
@@ -195,7 +199,7 @@ static void reset() {
     phaseT = 0;
     cur = sel = NONE;
     gloveSet = false;
-    tapT = idleT = mvN = mvT = glintT = hintT = winT = stuckT = annT = 0;
+    tapT = idleT = mvN = mvT = glintT = hintT = winT = stuckT = annT = birdT = 0;
     memset(glint, 0, sizeof glint);
     gen++;
     fx::clear();
@@ -429,7 +433,7 @@ void update(bool playing) {
             } else if (board::cleared()) {
                 if (!winT) {
                     // The table is cleared: the jackpot.
-                    fx::banner("JACKPOT!", fx::B_RAINBOW, 54, 170);
+                    fx::banner("MAHJONG!", fx::B_RAINBOW, 54, 170);
                     fx::fountain(fx::CONFETTI, 36, 96, 16);
                     fx::fountain(fx::CONFETTI, 92, 96, 16);
                     fx::fountain(fx::COIN, 64, 80, 12);
@@ -439,6 +443,7 @@ void update(bool playing) {
                 }
                 if (winT < 255) winT++;
                 if (winT == 60 || winT == 110) fx::fountain(fx::COIN, winT == 60 ? 30 : 98, 90, 10);
+                if (winT == 30) { birdT = 1; birdX16 = -34 << 4; }
             } else if (board::stuck()) {
                 if (!stuckT) {
                     fx::banner("NO MOVES", fx::B_RED, 58, 80);
@@ -449,6 +454,12 @@ void update(bool playing) {
                 if (stuckT < 255) stuckT++;
             } else stuckT = 0;
             break;
+    }
+    if (birdT) {
+        birdX16 = (int16_t)(birdX16 + 30);
+        if (birdT < 255) birdT++;
+        if (birdT == 12) audio::sfx(Sfx::Chirp);
+        if (birdX16 > 132 << 4) birdT = 0;
     }
     // The camera: the zoom steps (a whip, as CHChess's), the focus eases
     // towards the glove's tile.
@@ -579,6 +590,18 @@ static void drawMovers() {
     tile::setClip(0, GFX_H);
 }
 
+// Flap-flap-glide, as sparrows fly: wings up, level, down, level a few
+// times, then level for a while, the bird rising as it flaps and sinking as
+// it glides.
+static void drawBird() {
+    if (!birdT) return;
+    static const uint8_t FLAP[4] = {0, 1, 2, 1};
+    int p = birdT % 40;
+    uint8_t f = p < 20 ? FLAP[(p / 3) & 3] : 1;
+    int y = 76 + ((fx::isin(birdT * 6 + 64) * 5) >> 8);
+    sprite4(SPARROW[f], birdX16 >> 4, y, RM_ID, 512);      // twice its size
+}
+
 static void drawGlove(uint32_t frame) {
     if (!gloveOn() || !gloveSet) return;
     int x = (int)(gx16 >> 4), y = (int)(gy16 >> 4);
@@ -666,7 +689,7 @@ static uint32_t lastSig;
 
 static uint32_t signature(uint32_t frame, uint32_t ui) {
     int lo, hi;
-    if (fx::activeRows(lo, hi) || mvN || phase != PLAY || tapT || annT || vw != wantW) return frame;
+    if (fx::activeRows(lo, hi) || mvN || phase != PLAY || tapT || annT || vw != wantW || birdT) return frame;
     int32_t ftx, fty;
     focusTarget(ftx, fty);
     if (ftx != fx16 || fty != fy16) return frame;
@@ -697,6 +720,7 @@ bool render(uint32_t frame, uint32_t ui) {
     drawHud(frame);
     drawGlove(frame);
     fx::drawParticles();
+    drawBird();
     fx::drawFloats();
     fx::drawBanner();
     fx::applyShake(12, 127);

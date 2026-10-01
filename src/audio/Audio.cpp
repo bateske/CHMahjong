@@ -71,6 +71,9 @@ static const Step TITLE[]   = {
 // The camera whipping in and out.
 static const Step ZOOMIN[]  = { S(1200, 3400, 60) };
 static const Step ZOOMOUT[] = { S(3400, 1200, 60) };
+// The sparrow: two quick chirps and a trill.
+static const Step CHIRP[]   = { S(3000, 4200, 22), REST(50), S(3200, 4400, 22), REST(70),
+                                S(3800, 0, 12), S(3400, 0, 12), S(3800, 0, 12), S(3400, 0, 12), S(3900, 3000, 30) };
 
 struct SfxDef { const Step *steps; uint8_t n, prio; };
 #define DEF(a, p) { a, (uint8_t)(sizeof(a) / sizeof(a[0])), p }
@@ -78,7 +81,7 @@ static const SfxDef DEFS[(int)Sfx::COUNT] = {
     DEF(CURSOR, 0), DEF(SELECT, 1), DEF(DENY, 1), DEF(PICK, 1), DEF(DROP, 1), DEF(CLACK, 0),
     DEF(MATCH1, 2), DEF(MATCH2, 2), DEF(MATCH3, 2), DEF(MATCH4, 2), DEF(MATCH5, 2),
     DEF(COIN, 1), DEF(HINT, 1), DEF(UNDO, 1), DEF(SHUFFLE, 2), DEF(STUCK, 3), DEF(JACKPOT, 4),
-    DEF(WIN, 4), DEF(TITLE, 2), DEF(ZOOMIN, 0), DEF(ZOOMOUT, 0),
+    DEF(WIN, 4), DEF(TITLE, 2), DEF(ZOOMIN, 0), DEF(ZOOMOUT, 0), DEF(CHIRP, 1),
 };
 
 // --- Sequencer state (shared with the 1 kHz interrupt) ----------------------
