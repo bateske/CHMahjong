@@ -149,8 +149,9 @@ static void newDeal() {
 enum Item : uint8_t { I_PLAY, I_CONTINUE, I_OPTIONS };
 static const char *const ITEM[3] = {"PLAY", "CONTINUE", "OPTIONS"};
 
-// Tiles tumble down behind the title: some turn in the plane, some flip
-// over like a coin (face, edge, back, edge). Now and then a meteor: one tile
+// Tiles drift down behind the title, flipping over like coins (face, edge,
+// back, edge); now and then one tumbles instead, turning in the plane. Now
+// and then a meteor: one tile
 // streaks across at speed, spinning hard, with a rainbow trail, over
 // everything.
 enum Spin : uint8_t { TUMBLE, FLIP };
@@ -176,7 +177,7 @@ static void dropFaller(Faller &f, int y) {
     f.vy = (int8_t)fx::rndRange(6, 16);
     f.face = (uint8_t)(fx::rnd() % board::FACES);
     f.ang = (uint8_t)fx::rnd();
-    f.mode = (uint8_t)(fx::rnd() % 3 == 0 ? FLIP : TUMBLE);
+    f.mode = (uint8_t)(fx::rnd() % 12 ? FLIP : TUMBLE);           // a tumbler is rare
     f.spin = randSpin(1, 4);
 }
 
@@ -189,7 +190,7 @@ static void launchMeteor() {
     m.vy = (int8_t)fx::rndRange(70, 100);
     m.face = (uint8_t)(fx::rnd() % board::FACES);
     m.ang = (uint8_t)fx::rnd();
-    m.mode = (uint8_t)(fx::rnd() & 1 ? FLIP : TUMBLE);
+    m.mode = (uint8_t)(fx::rnd() % 12 ? FLIP : TUMBLE);
     m.spin = randSpin(12, 20);
     meteorOn = true;
 }
