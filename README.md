@@ -37,8 +37,8 @@ The faces, as drawn for the close-up:
 and graphics code and renders what the device shows:
 `python tools/chsim/chdrive.py --sim . tools/scripts/showcase.txt docs/`.)
 
-The 3x5 lettering is Press Play On Tape's font, as in CHBlackjack. See
-`NOTICE`.
+The 3x5 lettering is Press Play On Tape's font, as in CHBlackjack, and
+the title is drawn in the face of their Blackjack logo. See `NOTICE`.
 
 ## Installing
 
@@ -187,6 +187,8 @@ C++ compiler (zig, clang++ or g++ on the PATH, `pip install ziglang`, or
   fits the screen, nothing hangs in the air, a deal can be found) and
   writes `src/game/Layouts.cpp`. Saved games replay their deal: bump
   `VERSION` in `src/save/Save.cpp` when a layout or the deal changes.
+* **The title:** `tools/art/logo.txt`, a `#` for each pixel of the
+  lettering; the title screen tints it as CHBlackjack's logo.
 * `python tools/assets.py` packs the art, `python tools/audio/preview.py
   out/` renders the sound effects to WAV.
 

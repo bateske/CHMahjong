@@ -9,5 +9,7 @@ extern const uint8_t TILE_CELL_CLASSIC[43][24];   // 8x12, 2 bpp: 0 face, 1 embo
 extern const uint8_t TILE_INK_CLASSIC[43];          // a face's inks: low nibble, high nibble
 extern const uint8_t TILE_CELL_BIG[43][96];   // 16x24, 2 bpp: 0 face, 1 emboss, 2 and 3 the inks (tools/art/classic2x.txt)
 extern const uint8_t TILE_INK_BIG[43];          // a face's inks: low nibble, high nibble
+extern const uint8_t LOGO[];                                 // the title, 1 bpp MSB-first rows (tools/art/logo.txt)
+constexpr uint8_t LOGO_W = 91, LOGO_H = 18;
 extern const uint8_t HAND[];                                 // span4, fingertip on the bottom row
 constexpr uint8_t HAND_TIP = 5;                           // its column

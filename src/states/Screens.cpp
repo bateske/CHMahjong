@@ -199,9 +199,17 @@ static void titleRender(uint32_t frame) {
                                     : tile::Face{TILE_CELL_CLASSIC[f.face], TILE_INK_CLASSIC[f.face], nullptr, 0};
         tile::draw(face, f.x, f.y16 >> 4, LOOK);
     }
-    dither(0, 0, 128, 34, INK, 0);
-    // The top rows are FX_B, so the palette makes the logo shimmer.
-    title35("MAHJONG", 5, 4, FX_B, GOLD, WOOD, WINE, 17);
+    // The logo on a rail of its own, as the menu: the tiles fall between.
+    gfx_fillRect(0, 0, 128, 34, INK);
+    gfx_hline(0, 34, 128, GOLD);
+    // The logo, in CHBlackjack's lettering and colours: the top rows are
+    // FX_B, so the palette makes it shimmer with no redraw.
+    Mask m = maskBegin(LOGO_W, LOGO_H);
+    maskBlit1(m, LOGO, LOGO_W, LOGO_H);
+    uint8_t ramp[LOGO_H];
+    for (int i = 0; i < LOGO_H; i++) ramp[i] = i < 3 ? FX_B : (i < 12 ? GOLD : WOOD);
+    maskDraw(m, 64 - LOGO_W / 2, 4, INK, WINE, ramp);
+    centred35(26, "~SOLITAIRE~", CYAN);
     uint8_t items[3], n = titleItems(items);
     int y0 = 128 - n * 14 - 1;
     // The menu on a rail of its own: the tiles fall behind it.

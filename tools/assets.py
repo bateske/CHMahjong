@@ -191,6 +191,27 @@ def pack_span4(img, trans=TRANSPARENT):
     return out
 
 
+def load_logo():
+    """tools/art/logo.txt -> rows of 0/1 ('#' set). Comment lines are '# ' and text
+    (a row of the picture never has a space in it)."""
+    rows = [ln.rstrip() for ln in (ART / "logo.txt").read_text().splitlines() if ln.strip() and " " not in ln.strip()]
+    w = max(len(r) for r in rows)
+    return [[1 if ch == "#" else 0 for ch in r.ljust(w, ".")] for r in rows]
+
+
+def pack_rows1(bits):
+    """1 bit a pixel, MSB-first rows, each padded to a whole byte."""
+    out = []
+    for row in bits:
+        for x0 in range(0, len(row), 8):
+            b = 0
+            for i, v in enumerate(row[x0:x0 + 8]):
+                if v:
+                    b |= 0x80 >> i
+            out.append(b)
+    return out
+
+
 def preview(name, img, scale=6, bg=3):
     h, w = len(img), len(img[0])
     im = Image.new("RGB", (w, h), rgb(bg))
@@ -268,6 +289,15 @@ def main():
         total += len(cells) * n + len(inks)
         tile_sheet(f"tiles_{cname.lower()}", faces, 8 if fw < 10 else 5, emb)
     decls.insert(0, f"constexpr uint8_t TILE_BACK = {FACES};                         // the back of a tile, after the faces")
+
+    # The title's lettering (1 bpp).
+    logo = load_logo()
+    data = pack_rows1(logo)
+    defs.append(c_array("LOGO", data))
+    decls.append("extern const uint8_t LOGO[];                                 // the title, 1 bpp MSB-first rows (tools/art/logo.txt)\n"
+                 f"constexpr uint8_t LOGO_W = {len(logo[0])}, LOGO_H = {len(logo)};")
+    total += len(data)
+    preview("logo", [[1 if v else TRANSPARENT for v in r] for r in logo], 4)
 
     # The pointing hand (span4).
     hand = load_hand()
