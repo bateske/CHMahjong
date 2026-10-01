@@ -3,6 +3,7 @@
 #   k ink  r red  u blue  g green (FELT_LT)  y gold  b wood  n navy  c cyan
 # A face may use two colours at most. Faces on a row are a space apart;
 # python tools/assets.py turns this into src/assets/Assets.cpp.
+# (python tools/sheet.py export / import: the same faces as a picture.)
 
 # dots
 ...u... ..uuu.. ..uuu.. ....u.. .uuuuu. ..uuu.. .uuuuu. ..uuu.. ..uuu..

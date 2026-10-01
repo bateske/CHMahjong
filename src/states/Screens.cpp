@@ -71,6 +71,7 @@ static void enter(Scr s) {
 
 static void persist(bool withGame) {
     gfx_wait();                      // save builds its page in the chunk scratch
+    board::mark = stage::cursor();
     save::store(opt, stats, withGame);
     hasGame = withGame;
 }

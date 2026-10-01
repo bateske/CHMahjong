@@ -38,6 +38,7 @@ extern uint8_t streak;               // the last pair's multiplier (0: none yet)
 extern uint16_t streakT;             // frames left to keep it going
 extern uint32_t ticks;               // frames played
 extern uint16_t bonus;               // paid for clearing the table (0 until then)
+extern uint8_t mark;                 // the cursor's tile: the stage's, kept here to be saved with the game
 
 inline uint8_t group(uint8_t f) { return f < FLOWER ? f : (f < SEASON ? FLOWER : FLOWER + 1); }
 // Top-left of a tile in pile pixels: 8x12 tiles, each layer 2 px up and left.
@@ -81,7 +82,7 @@ struct Record {
     uint32_t seed;
     int32_t  chips;
     uint16_t secs;
-    uint8_t  layout, n, streak, pad;
+    uint8_t  layout, n, streak, mark;
     uint8_t  ab[HIST][2];            // a == NONE: a shuffle
     uint8_t  pay[HIST / 2];          // a nibble each: $10s
 };

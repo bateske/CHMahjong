@@ -1,3 +1,0 @@
-say G 0 12345
-wait 150
-snap turtle

@@ -1,0 +1,37 @@
+# The README's pictures: python tools/chsim/chdrive.py --sim . tools/scripts/showcase.txt docs/
+wait 30
+gif title 80 2
+say G 0 2026
+gif deal 60 2
+wait 40
+rec start 2
+solve 5 8
+wait 30
+rec stop pairs
+snap turtle
+# No moves: the banner, the panel, a shuffle.
+say G 0 4
+wait 150
+auto 72
+rec start 2
+wait 120
+tap A
+wait 110
+rec stop shuffle
+# The last pairs of a table, and the jackpot.
+say G 3 777
+wait 150
+solve 69 2
+rec start 2
+solve 3 8
+wait 230
+rec stop jackpot
+say G 1 31
+wait 150
+snap arena
+say G 2 31
+wait 150
+snap bridge
+say G 3 31
+wait 150
+snap twins

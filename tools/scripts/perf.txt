@@ -1,0 +1,23 @@
+# Render cost, estimated for the board from the simulator's timings.
+cal
+say G 0 12345
+wait 150
+perf (deal in)
+hold RIGHT
+wait 120
+release
+perf turtle: cursor moving, every frame redrawn
+solve 6 2
+perf turtle: six pairs taken
+say G 3 5
+wait 150
+perf (deal in)
+hold RIGHT
+wait 120
+release
+perf twins: cursor moving
+say J T
+wait 60
+perf (to the title)
+wait 120
+perf title

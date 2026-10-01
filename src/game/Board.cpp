@@ -13,6 +13,7 @@ uint8_t streak;
 uint16_t streakT;
 uint32_t ticks;
 uint16_t bonus;
+uint8_t mark = NONE;
 #if defined(CHSIM) || defined(CHTEST)
 uint8_t dealOrder[MAX_TILES];
 #endif
@@ -316,6 +317,7 @@ void save(Record &r) {
     r.layout = layout;
     r.n = nHist;
     r.streak = streak;
+    r.mark = mark;
     for (uint8_t k = 0; k < nHist; k++) {
         r.ab[k][0] = hist[k].a;
         r.ab[k][1] = hist[k].b;
@@ -343,6 +345,7 @@ bool restore(const Record &r) {
     ticks = (uint32_t)r.secs * 60;
     streak = r.streak;
     streakT = 0;
+    mark = r.mark;
     return left != 0;
 }
 

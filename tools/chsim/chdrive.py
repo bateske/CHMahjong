@@ -273,6 +273,7 @@ class Driver:
                 # with the D-pad and A: W frames between presses (default 6).
                 gap = int(args[1]) if len(args) > 1 else 6
                 for _ in range(int(args[0])):
+                    self.idle()
                     a, b = self.query("O", "NEXT").split()[1:3]
                     for tile in (a, b):
                         self.walk(tile, gap)

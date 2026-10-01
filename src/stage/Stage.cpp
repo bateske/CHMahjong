@@ -59,7 +59,8 @@ static int32_t shown;                // the chips on the HUD, rolling towards bo
 static uint8_t winT, stuckT;         // the cleared and the no-moves sequences
 static char ann[14];                 // a call-out on the plate
 static uint8_t annT;
-static const uint8_t ANN_FRAMES = 90;
+static const uint8_t ANN_FRAMES = 60;
+static uint8_t streakWas;            // the streak before the pair in flight
 
 static const uint8_t DROP_FRAMES = 60, FALL = 6;     // the deal: tiles land over a second
 static const uint8_t RM_ID[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
@@ -131,6 +132,7 @@ void resume() {
     reset();
     shown = board::chips;
     phase = PLAY;
+    if (board::isFree(board::mark)) cur = board::mark;     // where the glove was
     fixCursor();
 }
 
@@ -161,6 +163,7 @@ static void takePair(uint8_t a, uint8_t b) {
     int ax = sx(a), ay = sy(a) - 3, bx = sx(b), by = sy(b) - 1;
     memset(wasFree, 0, sizeof wasFree);
     for (uint8_t i = 0; i < board::count; i++) if (board::isFree(i)) mark(wasFree, i);
+    streakWas = board::streakT ? board::streak : 0;
     if (!board::match(a, b)) return;
     gen++;
     // They meet half way, side by side.
@@ -187,7 +190,7 @@ static void land() {
     fx::shake(4, 1);
     floatMoney(board::lastPay(), hitX, hitY - 10, GOLD);
     audio::sfx((Sfx)((uint8_t)Sfx::Match1 + board::streak - 1));
-    if (board::streak > 1) {
+    if (board::streak > 1 && board::streak > streakWas) {         // a step up: call it out
         char buf[14], *p = fmtStr(buf, "STREAK X");
         fmtInt(p, board::streak);
         announce(buf);
@@ -470,7 +473,7 @@ static const char *const HONOUR[7] = {"EAST WIND", "SOUTH WIND", "WEST WIND", "N
 static void drawHud(uint32_t frame) {
     gfx_fillRect(0, 0, 128, 9, INK);
     gfx_hline(0, 9, 128, GOLD);
-    char buf[16], *p = fmtInt(buf, leftShown);
+    char buf[16], *p = fmtInt(buf, phase == SHUFFLING ? board::count : leftShown);
     fmtStr(p, " TILES");
     text35(3, 2, buf, WHITE);
     // The chips, and the streak they are being paid at.
